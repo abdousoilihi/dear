@@ -1,0 +1,16 @@
+{
+    "name": "DigiPharma",
+    "short_name": "DigiPharma",
+    "start_url": "./Digipharma.html",
+    "display": "standalone",
+    "background_color": "#5D5CDE",
+    "theme_color": "#5D5CDE",
+    "description": "Gestion de Pharmacie 100% offline",
+    "icons": [
+        {
+            "src": "icons/icon-152x152.png",
+            "sizes": "152x152",
+            "type": "image/png"
+        }
+    ]
+}

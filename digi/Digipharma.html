@@ -1,0 +1,3667 @@
+<!DOCTYPE html>
+<html lang="fr" class="h-full">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DigiPharma - Gestion de Pharmacie</title>
+    <script src="lib/tailwindcss.js"></script>
+    <script src="lib/chart.js"></script>
+    <script src="lib/xlsx.full.min.js"></script>
+    <link href="lib/all.min.css" rel="stylesheet">
+
+    <!-- Manifest et meta pour PWA -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#5D5CDE">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="DigiPharma">
+
+    <!-- Icônes pour iOS -->
+    <link rel="apple-touch-icon" href="icons/icon-152x152.png">
+
+    <!-- Service Worker -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(registration => {
+                        console.log('ServiceWorker enregistré avec succès: ', registration.scope);
+                    })
+                    .catch(err => {
+                        console.log('Échec de l\'enregistrement du ServiceWorker: ', err);
+                    });
+            });
+        }
+    </script>
+    <script>
+        // Configuration Tailwind pour le thème personnalisé
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#5D5CDE',
+                        secondary: '#F3F4F6',
+                        dark: '#181818'
+                    }
+                }
+            }
+        }
+
+    </script>
+    <style>
+        /* Styles personnalisés pour les modales déplaçables */
+        .draggable-modal {
+            cursor: move;
+        }
+
+        .modal-content {
+            cursor: default;
+        }
+
+        /* Animation pour les transitions */
+        .fade-in {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Styles pour l'impression */
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+
+            .printable-receipt,
+            .printable-receipt * {
+                visibility: visible;
+            }
+
+            .printable-receipt {
+                position: absolute;
+                left: 0;
+                top: 0;
+            }
+        }
+    </style>
+</head>
+
+<body class="h-full bg-white dark:bg-dark transition-colors duration-300">
+    <!-- Écran de connexion -->
+    <div id="loginScreen"
+        class="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary to-blue-600">
+        <div class="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-2xl w-96">
+            <div class="text-center mb-8">
+                <i class="fas fa-pills text-6xl text-primary mb-4"></i>
+                <h1 class="text-3xl font-bold text-gray-800 dark:text-white">DigiPharma</h1>
+                <p class="text-gray-600 dark:text-gray-300">Gestion de Pharmacie</p>
+            </div>
+            <form id="loginForm" class="space-y-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Mot de passe</label>
+                    <input type="password" id="passwordInput"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-base"
+                        placeholder="Entrez votre mot de passe" required>
+                </div>
+                <button type="submit"
+                    class="w-full bg-primary text-white py-3 rounded-lg hover:bg-purple-700 transition-colors font-medium">
+                    Se connecter
+                </button>
+                <div id="loginError" class="text-red-500 text-sm text-center hidden">Mot de passe incorrect</div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Application principale -->
+    <div id="mainApp" class="hidden min-h-screen bg-gray-50 dark:bg-dark">
+        <!-- Header -->
+        <header class="bg-white dark:bg-gray-800 shadow-sm">
+            <div class="px-6">
+                <div class="flex items-center justify-between h-16">
+                    <!-- Logo et Titre -->
+                    <div class="flex items-center space-x-4">
+                        <i class="fas fa-pills text-2xl text-primary"></i>
+                        <h1 class="text-2xl font-bold text-gray-800 dark:text-white">DigiPharma</h1>
+                    </div>
+
+                    <!-- Navigation Tabs -->
+                    <div class="hidden md:flex items-center space-x-4" id="navigationTabs">
+                        <button class="nav-tab active py-2 px-3 rounded-md text-sm font-medium text-white bg-primary"
+                            data-tab="dashboard">
+                            <i class="fas fa-chart-dashboard mr-1"></i>Tableau de bord
+                        </button>
+                        <button
+                            class="nav-tab py-2 px-3 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            data-tab="products">
+                            <i class="fas fa-pills mr-1"></i>Produits
+                        </button>
+                        <button
+                            class="nav-tab py-2 px-3 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            data-tab="sales">
+                            <i class="fas fa-shopping-cart mr-1"></i>Ventes
+                        </button>
+                        <button
+                            class="nav-tab py-2 px-3 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            data-tab="purchases">
+                            <i class="fas fa-truck mr-1"></i>Achats
+                        </button>
+                        <button
+                            class="nav-tab py-2 px-3 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            data-tab="invoices">
+                            <i class="fas fa-file-invoice mr-1"></i>Factures
+                        </button>
+                        <button
+                            class="nav-tab py-2 px-3 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            data-tab="categories">
+                            <i class="fas fa-tags mr-1"></i>Catégories
+                        </button>
+                        <button
+                            class="nav-tab py-2 px-3 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            data-tab="users" id="usersTab">
+                            <i class="fas fa-users mr-1"></i>Utilisateurs
+                        </button>
+                    </div>
+
+                    <!-- Icônes d'action -->
+                    <div class="flex items-center space-x-3">
+                        <button id="cartToggleBtn"
+                            class="relative p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                            <i class="fas fa-shopping-cart"></i>
+                            <span id="cartItemCount"
+                                class="hidden absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">0</span>
+                        </button>
+                        <button id="darkModeToggle"
+                            class="p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                            <i class="fas fa-moon dark:hidden"></i>
+                            <i class="fas fa-sun hidden dark:inline"></i>
+                        </button>
+                        <button id="fullscreenToggle"
+                            class="p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                            <i class="fas fa-expand"></i>
+                        </button>
+                        <button id="downloadBtn"
+                            class="p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                            <i class="fas fa-download"></i>
+                        </button>
+                        <button id="installAppBtn"
+                            class="p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                            <i class="fas fa-mobile-alt"></i>
+                        </button>
+
+                        <!-- Menu Paramètres -->
+                        <div class="relative">
+                            <button id="settingsBtn"
+                                class="p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                <i class="fas fa-cog"></i>
+                            </button>
+                            <div id="settingsMenu"
+                                class="hidden absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg py-1 z-50">
+                                <button id="exportBtn"
+                                    class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center">
+                                    <i class="fas fa-file-export mr-2"></i>Exporter
+                                </button>
+                                <button id="importBtn"
+                                    class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center">
+                                    <i class="fas fa-file-import mr-2"></i>Importer
+                                </button>
+                                <button id="clearDataBtn"
+                                    class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center">
+                                    <i class="fas fa-trash mr-2"></i>Vider données
+                                </button>
+                                <div class="border-t border-gray-200 dark:border-gray-700 my-1"></div>
+                                <button id="logoutBtn"
+                                    class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-100 dark:hover:bg-red-900 flex items-center">
+                                    <i class="fas fa-sign-out-alt mr-2"></i>Déconnexion
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Navigation (sera masquée car intégrée au header) -->
+        <nav class="hidden bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+            <div class="px-6">
+                <div class="flex space-x-8" id="navigationTabsOld">
+                    <!-- ... -->
+                </div>
+            </div>
+        </nav>
+
+        <!-- Panier -->
+        <div id="cartContainer" class="fixed top-20 left-6 hidden z-40">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-96 max-h-96 overflow-hidden">
+                <div class="bg-primary text-white p-4 flex justify-between items-center">
+                    <h3 class="font-semibold">Panier</h3>
+                    <button id="closeCart" class="text-white hover:text-gray-200">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="p-4 max-h-64 overflow-y-auto">
+                    <div id="cartItems" class="space-y-2 mb-4">
+                        <!-- Articles du panier -->
+                    </div>
+                    <div class="border-t pt-4">
+                        <div class="mb-2">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">N°
+                                Facture</label>
+                            <input type="text" id="invoiceNumber"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base" readonly>
+                        </div>
+                        <div class="mb-2">
+                            <label
+                                class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Règlement</label>
+                            <select id="paymentType"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base">
+                                <option value="Payée">Payée</option>
+                                <option value="Impayée">Impayée</option>
+                                <option value="Partielle">Partielle</option>
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nom
+                                complet</label>
+                            <input type="text" id="customerName"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base">
+                        </div>
+                        <div class="mb-2">
+                            <label
+                                class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Contact</label>
+                            <input type="text" id="customerContact"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base">
+                        </div>
+                        <div class="mb-2">
+                            <label
+                                class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Adresse</label>
+                            <input type="text" id="customerAddress"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base">
+                        </div>
+                        <div class="mb-2" id="paidAmountContainer" style="display: none;">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Montant
+                                Payé</label>
+                            <input type="number" id="paidAmount"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base">
+                        </div>
+                        <div class="flex justify-between items-center mb-4">
+                            <span class="font-semibold">Total:</span>
+                            <span id="cartTotal" class="font-bold text-primary">0 KMF</span>
+                        </div>
+                        <button id="saveCartBtn"
+                            class="w-full bg-green-500 text-white py-2 rounded-lg hover:bg-green-600 transition-colors">
+                            Enregistrer
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Contenu principal -->
+        <main class="p-6">
+            <!-- Tableau de bord -->
+            <div id="dashboard" class="tab-content">
+                <div class="mb-6">
+                    <h2 class="text-2xl font-bold text-gray-800 dark:text-white mb-4">Tableau de bord</h2>
+                    <div class="flex space-x-4 mb-6">
+                        <select id="yearFilter"
+                            class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary text-base">
+                            <option value="">Toutes les années</option>
+                        </select>
+                        <select id="monthFilter"
+                            class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary text-base">
+                            <option value="">Tous les mois</option>
+                            <option value="1">Janvier</option>
+                            <option value="2">Février</option>
+                            <option value="3">Mars</option>
+                            <option value="4">Avril</option>
+                            <option value="5">Mai</option>
+                            <option value="6">Juin</option>
+                            <option value="7">Juillet</option>
+                            <option value="8">Août</option>
+                            <option value="9">Septembre</option>
+                            <option value="10">Octobre</option>
+                            <option value="11">Novembre</option>
+                            <option value="12">Décembre</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Indicateurs -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+                        <div class="flex items-center">
+                            <div class="p-3 rounded-full bg-green-100 dark:bg-green-900">
+                                <i class="fas fa-chart-line text-green-600 dark:text-green-400 text-xl"></i>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Ventes totales</p>
+                                <p class="text-2xl font-bold text-gray-900 dark:text-white" id="totalSales">0 KMF</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+                        <div class="flex items-center">
+                            <div class="p-3 rounded-full bg-blue-100 dark:bg-blue-900">
+                                <i class="fas fa-shopping-cart text-blue-600 dark:text-blue-400 text-xl"></i>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Achats totaux</p>
+                                <p class="text-2xl font-bold text-gray-900 dark:text-white" id="totalPurchases">0 KMF
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+                        <div class="flex items-center">
+                            <div class="p-3 rounded-full bg-purple-100 dark:bg-purple-900">
+                                <i class="fas fa-chart-pie text-purple-600 dark:text-purple-400 text-xl"></i>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Résultat</p>
+                                <p class="text-2xl font-bold text-gray-900 dark:text-white" id="totalProfit">0 KMF</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Graphiques -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+                        <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Top 5 produits vendus</h3>
+                        <canvas id="topProductsChart"></canvas>
+                    </div>
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+                        <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Produits moins vendus</h3>
+                        <canvas id="leastProductsChart"></canvas>
+                    </div>
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+                        <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Répartition par règlement
+                        </h3>
+                        <canvas id="paymentChart"></canvas>
+                    </div>
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+                        <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Ventes vs Achats mensuels
+                        </h3>
+                        <canvas id="salesPurchasesChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Produits -->
+            <div id="products" class="tab-content hidden">
+                <div class="mb-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-2xl font-bold text-gray-800 dark:text-white">Gestion des Produits</h2>
+                        <div class="flex space-x-4">
+                            <div class="bg-white dark:bg-gray-800 px-4 py-2 rounded-lg shadow">
+                                <span class="text-sm text-gray-600 dark:text-gray-400">Stock total: </span>
+                                <span class="font-bold text-primary" id="totalStock">0</span>
+                            </div>
+                            <button id="toggleViewBtn"
+                                class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors">
+                                <i class="fas fa-th mr-2"></i>Mode Galerie
+                            </button>
+                            <button id="addProductBtn"
+                                class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors">
+                                <i class="fas fa-plus mr-2"></i>Ajouter
+                            </button>
+                        </div>
+                    </div>
+                    <div class="flex space-x-4 mb-4">
+                        <input type="text" id="searchProducts" placeholder="Rechercher un produit..."
+                            class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary text-base">
+                        <select id="categoryFilter"
+                            class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary text-base">
+                            <option value="">Toutes les catégories</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="productsContainer" class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+                    <div id="productsTable" class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead class="bg-gray-50 dark:bg-gray-700">
+                                <tr>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Photo</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Produit</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Catégorie</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Prix</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Stock</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        État</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="productsTableBody"
+                                class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                <!-- Les produits seront chargés ici -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="productsGallery"
+                        class="hidden grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 p-6">
+                        <!-- Mode galerie sera chargé ici -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ventes -->
+            <div id="sales" class="tab-content hidden">
+                <div class="mb-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-2xl font-bold text-gray-800 dark:text-white">Gestion des Ventes</h2>
+                        <div class="flex space-x-4">
+                            <div class="bg-white dark:bg-gray-800 px-4 py-2 rounded-lg shadow">
+                                <span class="text-sm text-gray-600 dark:text-gray-400">Quantité vendue: </span>
+                                <span class="font-bold text-green-600" id="totalSoldQty">0</span>
+                            </div>
+                            <div class="bg-white dark:bg-gray-800 px-4 py-2 rounded-lg shadow">
+                                <span class="text-sm text-gray-600 dark:text-gray-400">CA: </span>
+                                <span class="font-bold text-green-600" id="totalRevenue">0 KMF</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-6 gap-4 mb-4">
+                        <input type="text" id="searchSales" placeholder="Rechercher..."
+                            class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary text-base">
+                        <select id="salesYearFilter"
+                            class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary text-base">
+                            <option value="">Toutes les années</option>
+                        </select>
+                        <select id="salesMonthFilter"
+                            class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary text-base">
+                            <option value="">Tous les mois</option>
+                            <option value="1">Janvier</option>
+                            <option value="2">Février</option>
+                            <option value="3">Mars</option>
+                            <option value="4">Avril</option>
+                            <option value="5">Mai</option>
+                            <option value="6">Juin</option>
+                            <option value="7">Juillet</option>
+                            <option value="8">Août</option>
+                            <option value="9">Septembre</option>
+                            <option value="10">Octobre</option>
+                            <option value="11">Novembre</option>
+                            <option value="12">Décembre</option>
+                        </select>
+                        <select id="salesCategoryFilter"
+                            class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary text-base">
+                            <option value="">Toutes les catégories</option>
+                        </select>
+                        <select id="salesAccountingFilter"
+                            class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary text-base">
+                            <option value="">Toutes</option>
+                            <option value="validée">Validées</option>
+                            <option value="invalidée">Non validées</option>
+                        </select>
+                        <select id="salesPaymentFilter"
+                            class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary text-base">
+                            <option value="">Tous règlements</option>
+                            <option value="Payée">Payée</option>
+                            <option value="Impayée">Impayée</option>
+                            <option value="Partielle">Partielle</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead class="bg-gray-50 dark:bg-gray-700">
+                                <tr>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Article</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Quantité</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Prix</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Total</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Règlement</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Date</th>
+                                    <th
+                                        class="hidden px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="salesTableBody"
+                                class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                <!-- Les ventes seront chargées ici -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Achats -->
+            <div id="purchases" class="tab-content hidden">
+                <div class="mb-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-2xl font-bold text-gray-800 dark:text-white">Gestion des Achats</h2>
+                        <div class="flex space-x-4">
+                            <div class="bg-white dark:bg-gray-800 px-4 py-2 rounded-lg shadow">
+                                <span class="text-sm text-gray-600 dark:text-gray-400">Quantité achetée: </span>
+                                <span class="font-bold text-blue-600" id="totalPurchasedQty">0</span>
+                            </div>
+                            <div class="bg-white dark:bg-gray-800 px-4 py-2 rounded-lg shadow">
+                                <span class="text-sm text-gray-600 dark:text-gray-400">Coût total: </span>
+                                <span class="font-bold text-blue-600" id="totalCost">0 KMF</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
+                        <input type="text" id="searchPurchases" placeholder="Rechercher..."
+                            class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary text-base">
+                        <select id="purchasesYearFilter"
+                            class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary text-base">
+                            <option value="">Toutes les années</option>
+                        </select>
+                        <select id="purchasesMonthFilter"
+                            class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary text-base">
+                            <option value="">Tous les mois</option>
+                            <option value="1">Janvier</option>
+                            <option value="2">Février</option>
+                            <option value="3">Mars</option>
+                            <option value="4">Avril</option>
+                            <option value="5">Mai</option>
+                            <option value="6">Juin</option>
+                            <option value="7">Juillet</option>
+                            <option value="8">Août</option>
+                            <option value="9">Septembre</option>
+                            <option value="10">Octobre</option>
+                            <option value="11">Novembre</option>
+                            <option value="12">Décembre</option>
+                        </select>
+                        <select id="purchasesCategoryFilter"
+                            class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary text-base">
+                            <option value="">Toutes les catégories</option>
+                        </select>
+                        <select id="purchasesAccountingFilter"
+                            class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary text-base">
+                            <option value="">Toutes</option>
+                            <option value="validée">Validées</option>
+                            <option value="invalidée">Non validées</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead class="bg-gray-50 dark:bg-gray-700">
+                                <tr>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Produit</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Quantité</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Prix d'achat</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Total</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Fournisseur</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Date</th>
+                                    <th
+                                        class="hidden px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="purchasesTableBody"
+                                class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                <!-- Les achats seront chargés ici -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Factures -->
+            <div id="invoices" class="tab-content hidden">
+                <div class="mb-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-2xl font-bold text-gray-800 dark:text-white">Gestion des Factures</h2>
+                        <div class="bg-white dark:bg-gray-800 px-4 py-2 rounded-lg shadow">
+                            <span class="text-sm text-gray-600 dark:text-gray-400">Total factures: </span>
+                            <span class="font-bold text-primary" id="totalInvoices">0</span>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                        <input type="text" id="searchInvoices" placeholder="Rechercher facture..."
+                            class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary text-base">
+                        <select id="invoicesYearFilter"
+                            class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary text-base">
+                            <option value="">Toutes les années</option>
+                        </select>
+                        <select id="invoicesMonthFilter"
+                            class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary text-base">
+                            <option value="">Tous les mois</option>
+                            <option value="1">Janvier</option>
+                            <option value="2">Février</option>
+                            <option value="3">Mars</option>
+                            <option value="4">Avril</option>
+                            <option value="5">Mai</option>
+                            <option value="6">Juin</option>
+                            <option value="7">Juillet</option>
+                            <option value="8">Août</option>
+                            <option value="9">Septembre</option>
+                            <option value="10">Octobre</option>
+                            <option value="11">Novembre</option>
+                            <option value="12">Décembre</option>
+                        </select>
+                        <select id="invoicesPaymentFilter"
+                            class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary text-base">
+                            <option value="">Tous règlements</option>
+                            <option value="Payée">Payée</option>
+                            <option value="Impayée">Impayée</option>
+                            <option value="Partielle">Partielle</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead class="bg-gray-50 dark:bg-gray-700">
+                                <tr>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        N° Facture</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Client</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Total</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Payé</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Règlement</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Date</th>
+                                    <th
+                                        class="hidden px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="invoicesTableBody"
+                                class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                <!-- Les factures seront chargées ici -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Catégories -->
+            <div id="categories" class="tab-content hidden">
+                <div class="mb-6">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-2xl font-bold text-gray-800 dark:text-white">Gestion des Catégories</h2>
+                        <button id="addCategoryBtn"
+                            class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors">
+                            <i class="fas fa-plus mr-2"></i>Ajouter
+                        </button>
+                    </div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead class="bg-gray-50 dark:bg-gray-700">
+                                <tr>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        ID</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Catégorie</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="categoriesTableBody"
+                                class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                <!-- Les catégories seront chargées ici -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Utilisateurs -->
+            <div id="users" class="tab-content hidden">
+                <div class="mb-6">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-2xl font-bold text-gray-800 dark:text-white">Gestion des Utilisateurs</h2>
+                        <button id="addUserBtn"
+                            class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors">
+                            <i class="fas fa-plus mr-2"></i>Ajouter
+                        </button>
+                    </div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead class="bg-gray-50 dark:bg-gray-700">
+                                <tr>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        ID</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Mot de passe</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Rôle</th>
+                                    <th
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usersTableBody"
+                                class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                <!-- Les utilisateurs seront chargés ici -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modales -->
+    <!-- Modale Produit -->
+    <div id="productModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4 draggable-modal">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-white" id="productModalTitle">Ajouter un
+                        produit</h3>
+                    <button class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                        onclick="closeModal('productModal')">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <form id="productForm" class="space-y-4">
+                    <input type="hidden" id="productId">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Photo</label>
+                        <input type="file" id="productPhoto" accept="image/*"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base">
+                        <img id="productPhotoPreview" class="mt-2 w-20 h-20 object-cover rounded hidden">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nom du
+                            produit</label>
+                        <input type="text" id="productName"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Catégorie</label>
+                        <select id="productCategory"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base" required>
+                            <option value="">Sélectionner une catégorie</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Détails</label>
+                        <textarea id="productDetails"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base" rows="3"></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Prix de
+                            vente</label>
+                        <input type="number" id="productPrice"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base" required>
+                    </div>
+                    <div class="flex space-x-4">
+                        <button type="button"
+                            class="flex-1 bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-600 transition-colors"
+                            onclick="closeModal('productModal')">
+                            Annuler
+                        </button>
+                        <button type="submit"
+                            class="flex-1 bg-primary text-white py-2 rounded-lg hover:bg-purple-700 transition-colors">
+                            Enregistrer
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modale Vente -->
+    <div id="saleModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4 draggable-modal">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-white">Vendre un produit</h3>
+                    <button class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                        onclick="closeModal('saleModal')">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <form id="saleForm" class="space-y-4">
+                    <input type="hidden" id="saleProductId">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Article</label>
+                        <input type="text" id="saleProductName"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base bg-gray-100" readonly>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Quantité</label>
+                        <input type="number" id="saleQuantity"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base" min="1" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Prix de
+                            vente</label>
+                        <input type="number" id="salePrice"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Total</label>
+                        <input type="number" id="saleTotal"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base bg-gray-100" readonly>
+                    </div>
+                    <div class="flex space-x-4">
+                        <button type="button"
+                            class="flex-1 bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-600 transition-colors"
+                            onclick="closeModal('saleModal')">
+                            Annuler
+                        </button>
+                        <button type="submit"
+                            class="flex-1 bg-primary text-white py-2 rounded-lg hover:bg-purple-700 transition-colors">
+                            Ajouter au panier
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modale Achat -->
+    <div id="purchaseModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4 draggable-modal">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-white">Approvisionner</h3>
+                    <button class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                        onclick="closeModal('purchaseModal')">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <form id="purchaseForm" class="space-y-4">
+                    <input type="hidden" id="purchaseProductId">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Article</label>
+                        <input type="text" id="purchaseProductName"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base bg-gray-100" readonly>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Stock
+                            actuel</label>
+                        <input type="number" id="currentStock"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base bg-gray-100" readonly>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Quantité</label>
+                        <input type="number" id="purchaseQuantity"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base" min="1" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Prix
+                            d'achat</label>
+                        <input type="number" id="purchasePrice"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Total</label>
+                        <input type="number" id="purchaseTotal"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base bg-gray-100" readonly>
+                    </div>
+                    <div>
+                        <label
+                            class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fournisseur</label>
+                        <input type="text" id="supplier"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base">
+                    </div>
+                    <div class="flex space-x-4">
+                        <button type="button"
+                            class="flex-1 bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-600 transition-colors"
+                            onclick="closeModal('purchaseModal')">
+                            Annuler
+                        </button>
+                        <button type="submit"
+                            class="flex-1 bg-primary text-white py-2 rounded-lg hover:bg-purple-700 transition-colors">
+                            Enregistrer
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modale Catégorie -->
+    <div id="categoryModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4 draggable-modal">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-white">Ajouter une catégorie</h3>
+                    <button class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                        onclick="closeModal('categoryModal')">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <form id="categoryForm" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nom de la
+                            catégorie</label>
+                        <input type="text" id="categoryName"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base" required>
+                    </div>
+                    <div class="flex space-x-4">
+                        <button type="button"
+                            class="flex-1 bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-600 transition-colors"
+                            onclick="closeModal('categoryModal')">
+                            Annuler
+                        </button>
+                        <button type="submit"
+                            class="flex-1 bg-primary text-white py-2 rounded-lg hover:bg-purple-700 transition-colors">
+                            Enregistrer
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modale Utilisateur -->
+    <div id="userModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4 draggable-modal">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-white">Ajouter un utilisateur</h3>
+                    <button class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                        onclick="closeModal('userModal')">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <form id="userForm" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mot de
+                            passe</label>
+                        <input type="password" id="userPassword"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Rôle</label>
+                        <select id="userRole" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-base"
+                            required>
+                            <option value="">Sélectionner un rôle</option>
+                            <option value="Admin">Admin</option>
+                            <option value="User">User</option>
+                        </select>
+                    </div>
+                    <div class="flex space-x-4">
+                        <button type="button"
+                            class="flex-1 bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-600 transition-colors"
+                            onclick="closeModal('userModal')">
+                            Annuler
+                        </button>
+                        <button type="submit"
+                            class="flex-1 bg-primary text-white py-2 rounded-lg hover:bg-purple-700 transition-colors">
+                            Enregistrer
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modale Reçu -->
+    <div id="receiptModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-white">Reçu de caisse</h3>
+                    <button class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                        onclick="closeModal('receiptModal')">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div id="receiptContent" class="printable-receipt text-sm">
+                    <!-- Le contenu du reçu sera généré ici -->
+                </div>
+                <div class="mt-4 flex space-x-4">
+                    <button onclick="printReceipt()"
+                        class="flex-1 bg-primary text-white py-2 rounded-lg hover:bg-purple-700 transition-colors">
+                        <i class="fas fa-print mr-2"></i>Imprimer
+                    </button>
+                    <button onclick="closeModal('receiptModal')"
+                        class="flex-1 bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-600 transition-colors">
+                        Fermer
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Input file caché pour l'import -->
+    <input type="file" id="importFileInput" accept=".xlsx,.xls" style="display: none;">
+
+    <!-- Modale Photo -->
+    <div id="imageModal" class="fixed inset-0 bg-black bg-opacity-75 hidden items-center justify-center z-50">
+        <div class="relative p-4">
+            <button class="absolute top-0 right-0 text-white text-3xl hover:text-gray-300"
+                onclick="closeModal('imageModal')">
+                <i class="fas fa-times"></i>
+            </button>
+            <img id="fullscreenImage" src="" class="max-w-screen-xl max-h-screen-xl rounded-lg shadow-lg">
+        </div>
+    </div>
+
+    <script>
+        // ==========================
+        // VARIABLES GLOBALES
+        // ==========================
+
+        let currentUser = null; // Utilisateur connecté
+        let currentTab = 'dashboard'; // Onglet actuel
+        let isGalleryView = false; // Mode d'affichage des produits
+        let cart = []; // Panier de vente
+        let charts = {}; // Graphiques Chart.js
+        let currentFilteredData = {}; // Données filtrées actuelles
+        let deferredPrompt; // Pour l'installation PWA
+
+        // ==========================
+        // GESTION DE LA BASE DE DONNÉES INDEXEDDB
+        // ==========================
+
+        class DatabaseManager {
+            constructor() {
+                this.db = null;
+                this.dbName = 'DigiPharmaDB';
+                this.version = 1;
+            }
+
+            // Initialisation de la base de données
+            async init() {
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open(this.dbName, this.version);
+
+                    request.onerror = () => reject(request.error);
+                    request.onsuccess = () => {
+                        this.db = request.result;
+                        resolve();
+                    };
+
+                    request.onupgradeneeded = (event) => {
+                        const db = event.target.result;
+
+                        // Table Utilisateurs
+                        if (!db.objectStoreNames.contains('users')) {
+                            const userStore = db.createObjectStore('users', { keyPath: 'id', autoIncrement: true });
+                        }
+
+                        // Table Catégories
+                        if (!db.objectStoreNames.contains('categories')) {
+                            const categoryStore = db.createObjectStore('categories', { keyPath: 'id', autoIncrement: true });
+                        }
+
+                        // Table Produits
+                        if (!db.objectStoreNames.contains('products')) {
+                            const productStore = db.createObjectStore('products', { keyPath: 'id', autoIncrement: true });
+                        }
+
+                        // Table Achats
+                        if (!db.objectStoreNames.contains('purchases')) {
+                            const purchaseStore = db.createObjectStore('purchases', { keyPath: 'id', autoIncrement: true });
+                        }
+
+                        // Table Ventes
+                        if (!db.objectStoreNames.contains('sales')) {
+                            const saleStore = db.createObjectStore('sales', { keyPath: 'id', autoIncrement: true });
+                        }
+
+                        // Table Factures
+                        if (!db.objectStoreNames.contains('invoices')) {
+                            const invoiceStore = db.createObjectStore('invoices', { keyPath: 'fact' });
+                        }
+                    };
+                });
+            }
+
+            // Ajouter un enregistrement
+            async add(storeName, data) {
+                return new Promise((resolve, reject) => {
+                    const transaction = this.db.transaction([storeName], 'readwrite');
+                    const store = transaction.objectStore(storeName);
+                    const request = store.add(data);
+
+                    request.onerror = () => reject(request.error);
+                    request.onsuccess = () => resolve(request.result);
+                });
+            }
+
+            // Récupérer tous les enregistrements
+            async getAll(storeName) {
+                return new Promise((resolve, reject) => {
+                    const transaction = this.db.transaction([storeName], 'readonly');
+                    const store = transaction.objectStore(storeName);
+                    const request = store.getAll();
+
+                    request.onerror = () => reject(request.error);
+                    request.onsuccess = () => resolve(request.result);
+                });
+            }
+
+            // Récupérer un enregistrement par ID
+            async get(storeName, id) {
+                return new Promise((resolve, reject) => {
+                    const transaction = this.db.transaction([storeName], 'readonly');
+                    const store = transaction.objectStore(storeName);
+                    const request = store.get(id);
+
+                    request.onerror = () => reject(request.error);
+                    request.onsuccess = () => resolve(request.result);
+                });
+            }
+
+            // Mettre à jour un enregistrement
+            async update(storeName, data) {
+                return new Promise((resolve, reject) => {
+                    const transaction = this.db.transaction([storeName], 'readwrite');
+                    const store = transaction.objectStore(storeName);
+                    const request = store.put(data);
+
+                    request.onerror = () => reject(request.error);
+                    request.onsuccess = () => resolve(request.result);
+                });
+            }
+
+            // Supprimer un enregistrement
+            async delete(storeName, id) {
+                return new Promise((resolve, reject) => {
+                    const transaction = this.db.transaction([storeName], 'readwrite');
+                    const store = transaction.objectStore(storeName);
+                    const request = store.delete(id);
+
+                    request.onerror = () => reject(request.error);
+                    request.onsuccess = () => resolve(request.result);
+                });
+            }
+
+            // Vider une table
+            async clear(storeName) {
+                return new Promise((resolve, reject) => {
+                    const transaction = this.db.transaction([storeName], 'readwrite');
+                    const store = transaction.objectStore(storeName);
+                    const request = store.clear();
+
+                    request.onerror = () => reject(request.error);
+                    request.onsuccess = () => resolve(request.result);
+                });
+            }
+        }
+
+        const db = new DatabaseManager();
+
+        // ==========================
+        // INITIALISATION DE L'APPLICATION
+        // ==========================
+
+        document.addEventListener('DOMContentLoaded', async function () {
+            // Initialisation de la base de données
+            await db.init();
+
+            // Initialisation des données par défaut
+            await initializeDefaultData();
+
+            // Gestion du mode sombre
+            initializeDarkMode();
+
+            // Gestion des événements
+            initializeEventListeners();
+
+            // Gestion de l'installation PWA
+            initializePWAInstallation();
+
+            // Afficher l'écran de connexion
+            showLoginScreen();
+        });
+
+        // Initialisation des données par défaut
+        async function initializeDefaultData() {
+            try {
+                // Vérifier si des utilisateurs existent déjà
+                const users = await db.getAll('users');
+                if (users.length === 0) {
+                    // Ajouter les utilisateurs par défaut
+                    await db.add('users', { id: 1, password: '1995', role: 'Admin' });
+                    await db.add('users', { id: 2, password: '1234', role: 'User' });
+                    console.log('Utilisateurs par défaut ajoutés');
+                }
+
+                // Vérifier si des catégories existent
+                const categories = await db.getAll('categories');
+                if (categories.length === 0) {
+                    // Ajouter quelques catégories par défaut
+                    await db.add('categories', { category: 'Médicaments' });
+                    await db.add('categories', { category: 'Matériel médical' });
+                    await db.add('categories', { category: 'Cosmétiques' });
+                    console.log('Catégories par défaut ajoutées');
+                }
+
+            } catch (error) {
+                console.error('Erreur lors de l\'initialisation des données:', error);
+            }
+        }
+
+        // ==========================
+        // GESTION DU MODE SOMBRE
+        // ==========================
+
+        function initializeDarkMode() {
+            // Détection du mode sombre du système
+            if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                document.documentElement.classList.add('dark');
+            }
+
+            // Écouter les changements de préférence
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+                if (event.matches) {
+                    document.documentElement.classList.add('dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                }
+            });
+        }
+
+        // ==========================
+        // GESTION DES ÉVÉNEMENTS
+        // ==========================
+
+        function initializeEventListeners() {
+            // Connexion
+            document.getElementById('loginForm').addEventListener('submit', handleLogin);
+
+            // Déconnexion
+            document.getElementById('logoutBtn').addEventListener('click', logout);
+
+            // Navigation entre onglets
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+            });
+
+            // Mode sombre
+            document.getElementById('darkModeToggle').addEventListener('click', toggleDarkMode);
+
+            // Plein écran
+            document.getElementById('fullscreenToggle').addEventListener('click', toggleFullscreen);
+
+            // Export/Import/Clear
+            document.getElementById('exportBtn').addEventListener('click', exportData);
+            document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFileInput').click());
+            document.getElementById('importFileInput').addEventListener('change', importData);
+            document.getElementById('clearDataBtn').addEventListener('click', clearAllData);
+            document.getElementById('downloadBtn').addEventListener('click', exportData);
+            document.getElementById('settingsBtn').addEventListener('click', toggleSettingsMenu);
+            document.getElementById('installAppBtn').addEventListener('click', installApp);
+
+            // Boutons d'ajout
+            document.getElementById('addProductBtn').addEventListener('click', () => openModal('productModal'));
+            document.getElementById('addCategoryBtn').addEventListener('click', () => openModal('categoryModal'));
+            document.getElementById('addUserBtn').addEventListener('click', () => openModal('userModal'));
+
+            // Toggle vue produits
+            document.getElementById('toggleViewBtn').addEventListener('click', toggleProductView);
+
+            // Formulaires
+            document.getElementById('productForm').addEventListener('submit', handleProductSubmit);
+            document.getElementById('categoryForm').addEventListener('submit', handleCategorySubmit);
+            document.getElementById('userForm').addEventListener('submit', handleUserSubmit);
+            document.getElementById('saleForm').addEventListener('submit', handleSaleSubmit);
+            document.getElementById('purchaseForm').addEventListener('submit', handlePurchaseSubmit);
+
+            // Recherche et filtres avec debounce
+            document.getElementById('searchProducts').addEventListener('input', debounce(filterProducts, 300));
+            document.getElementById('categoryFilter').addEventListener('change', filterProducts);
+            document.getElementById('searchSales').addEventListener('input', debounce(filterSales, 300));
+            document.getElementById('salesYearFilter').addEventListener('change', filterSales);
+            document.getElementById('salesMonthFilter').addEventListener('change', filterSales);
+            document.getElementById('salesCategoryFilter').addEventListener('change', filterSales);
+            document.getElementById('salesAccountingFilter').addEventListener('change', filterSales);
+            document.getElementById('salesPaymentFilter').addEventListener('change', filterSales);
+            document.getElementById('searchPurchases').addEventListener('input', debounce(filterPurchases, 300));
+            document.getElementById('purchasesYearFilter').addEventListener('change', filterPurchases);
+            document.getElementById('purchasesMonthFilter').addEventListener('change', filterPurchases);
+            document.getElementById('purchasesCategoryFilter').addEventListener('change', filterPurchases);
+            document.getElementById('purchasesAccountingFilter').addEventListener('change', filterPurchases);
+            document.getElementById('searchInvoices').addEventListener('input', debounce(filterInvoices, 300));
+            document.getElementById('invoicesYearFilter').addEventListener('change', filterInvoices);
+            document.getElementById('invoicesMonthFilter').addEventListener('change', filterInvoices);
+            document.getElementById('invoicesPaymentFilter').addEventListener('change', filterInvoices);
+
+            // Calculs automatiques dans les formulaires
+            document.getElementById('saleQuantity').addEventListener('input', calculateSaleTotal);
+            document.getElementById('salePrice').addEventListener('input', calculateSaleTotal);
+            document.getElementById('purchaseQuantity').addEventListener('input', calculatePurchaseTotal);
+            document.getElementById('purchasePrice').addEventListener('input', calculatePurchaseTotal);
+
+            // Panier
+            document.getElementById('cartToggleBtn').addEventListener('click', toggleCart);
+            document.getElementById('closeCart').addEventListener('click', hideCart);
+            document.getElementById('saveCartBtn').addEventListener('click', saveCart);
+            document.getElementById('paymentType').addEventListener('change', togglePaidAmountField);
+
+            // Filtres du dashboard
+            document.getElementById('yearFilter').addEventListener('change', updateDashboard);
+            document.getElementById('monthFilter').addEventListener('change', updateDashboard);
+
+            // Preview de l'image produit
+            document.getElementById('productPhoto').addEventListener('change', previewProductPhoto);
+
+            // Modales déplaçables
+            initializeDraggableModals();
+        }
+
+        // Fonction debounce pour éviter trop d'appels lors de la saisie
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // ==========================
+        // GESTION DE LA CONNEXION
+        // ==========================
+
+        async function handleLogin(e) {
+            e.preventDefault();
+
+            const password = document.getElementById('passwordInput').value;
+            const users = await db.getAll('users');
+
+            // Rechercher l'utilisateur par mot de passe
+            const user = users.find(u => u.password === password);
+
+            if (user) {
+                currentUser = user;
+                document.getElementById('loginScreen').classList.add('hidden');
+                document.getElementById('mainApp').classList.remove('hidden');
+
+                // Masquer l'onglet utilisateurs si ce n'est pas un admin
+                if (user.role !== 'Admin') {
+                    document.getElementById('usersTab').style.display = 'none';
+                }
+
+                // Charger les données initiales
+                await loadAllData();
+                updateDashboard();
+
+                console.log(`Utilisateur connecté: ${user.role}`);
+            } else {
+                document.getElementById('loginError').classList.remove('hidden');
+                setTimeout(() => {
+                    document.getElementById('loginError').classList.add('hidden');
+                }, 3000);
+            }
+        }
+
+        function logout() {
+            currentUser = null;
+            document.getElementById('loginScreen').classList.remove('hidden');
+            document.getElementById('mainApp').classList.add('hidden');
+            document.getElementById('passwordInput').value = '';
+            hideCart();
+        }
+
+        function showLoginScreen() {
+            document.getElementById('loginScreen').classList.remove('hidden');
+            document.getElementById('mainApp').classList.add('hidden');
+        }
+
+        // ==========================
+        // NAVIGATION ENTRE ONGLETS
+        // ==========================
+
+        function switchTab(tabName) {
+            // Masquer tous les contenus
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.add('hidden');
+            });
+
+            // Désactiver tous les onglets
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.classList.remove('active', 'text-white', 'bg-primary');
+                tab.classList.add('text-gray-700', 'dark:text-gray-300', 'hover:bg-gray-100', 'dark:hover:bg-gray-700');
+            });
+
+            // Activer l'onglet sélectionné
+            const activeTab = document.querySelector(`[data-tab="${tabName}"]`);
+            activeTab.classList.add('active', 'text-white', 'bg-primary');
+            activeTab.classList.remove('text-gray-700', 'dark:text-gray-300', 'hover:bg-gray-100', 'dark:hover:bg-gray-700');
+
+            // Afficher le contenu correspondant
+            document.getElementById(tabName).classList.remove('hidden');
+
+            currentTab = tabName;
+
+            // Charger les données pour l'onglet actuel
+            loadTabData(tabName);
+        }
+
+        async function loadTabData(tabName) {
+            switch (tabName) {
+                case 'dashboard':
+                    updateDashboard();
+                    break;
+                case 'products':
+                    await loadProducts();
+                    break;
+                case 'sales':
+                    await loadSales();
+                    break;
+                case 'purchases':
+                    await loadPurchases();
+                    break;
+                case 'invoices':
+                    await loadInvoices();
+                    break;
+                case 'categories':
+                    await loadCategories();
+                    break;
+                case 'users':
+                    await loadUsers();
+                    break;
+            }
+        }
+
+        // ==========================
+        // GESTION DES MODALES
+        // ==========================
+
+        function openModal(modalId, data = null) {
+            const modal = document.getElementById(modalId);
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+
+            // Remplir le formulaire si des données sont fournies
+            if (data && modalId === 'productModal') {
+                fillProductForm(data);
+            }
+        }
+
+        function closeModal(modalId) {
+            const modal = document.getElementById(modalId);
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+
+            // Réinitialiser le formulaire
+            const form = modal.querySelector('form');
+            if (form) {
+                form.reset();
+
+                // Réinitialiser les champs cachés et preview
+                if (modalId === 'productModal') {
+                    document.getElementById('productId').value = '';
+                    document.getElementById('productPhotoPreview').classList.add('hidden');
+                    document.getElementById('productModalTitle').textContent = 'Ajouter un produit';
+                }
+            }
+        }
+
+        // Rendre les modales déplaçables
+        function initializeDraggableModals() {
+            document.querySelectorAll('.draggable-modal').forEach(modal => {
+                let isDragging = false;
+                let startX, startY, initialX, initialY;
+
+                modal.addEventListener('mousedown', (e) => {
+                    if (e.target.closest('.modal-content')) return;
+
+                    isDragging = true;
+                    startX = e.clientX;
+                    startY = e.clientY;
+
+                    const rect = modal.getBoundingClientRect();
+                    initialX = rect.left;
+                    initialY = rect.top;
+
+                    modal.style.position = 'fixed';
+                    modal.style.left = initialX + 'px';
+                    modal.style.top = initialY + 'px';
+                    modal.style.margin = '0';
+                });
+
+                document.addEventListener('mousemove', (e) => {
+                    if (!isDragging) return;
+
+                    const deltaX = e.clientX - startX;
+                    const deltaY = e.clientY - startY;
+
+                    modal.style.left = (initialX + deltaX) + 'px';
+                    modal.style.top = (initialY + deltaY) + 'px';
+                });
+
+                document.addEventListener('mouseup', () => {
+                    isDragging = false;
+                });
+            });
+        }
+
+
+
+        // ==========================
+        // GESTION DES PRODUITS
+        // ==========================
+
+        async function loadProducts() {
+            try {
+                const products = await db.getAll('products');
+                const categories = await db.getAll('categories');
+
+                // Remplir le filtre de catégories
+                const categoryFilter = document.getElementById('categoryFilter');
+                const productCategorySelect = document.getElementById('productCategory');
+
+                categoryFilter.innerHTML = '<option value="">Toutes les catégories</option>';
+                productCategorySelect.innerHTML = '<option value="">Sélectionner une catégorie</option>';
+
+                categories.forEach(category => {
+                    categoryFilter.innerHTML += `<option value="${category.category}">${category.category}</option>`;
+                    productCategorySelect.innerHTML += `<option value="${category.category}">${category.category}</option>`;
+                });
+
+                // Calculer le stock pour chaque produit
+                const purchases = await db.getAll('purchases');
+                const sales = await db.getAll('sales');
+
+                const productsWithStock = products.map(product => {
+                    // Calculer les achats totaux pour ce produit (toutes les opérations)
+                    const totalPurchased = purchases
+                        .filter(p => p.product === product.name)
+                        .reduce((sum, p) => sum + p.quantity, 0);
+
+                    // Calculer les ventes totales pour ce produit (toutes les opérations)
+                    const totalSold = sales
+                        .filter(s => s.article === product.name)
+                        .reduce((sum, s) => sum + s.quantity, 0);
+
+                    // Stock = Achats - Ventes
+                    const stock = Math.max(0, totalPurchased - totalSold); // Éviter les stocks négatifs
+
+                    // Déterminer l'état du stock
+                    let state;
+                    if (stock === 0) state = 'Rupture';
+                    else if (stock <= 3) state = 'Commande';
+                    else state = 'Stock';
+
+                    return { ...product, stock, state };
+                });
+
+                // Stocker les données pour le filtrage
+                currentFilteredData.products = productsWithStock;
+
+                // Appliquer les filtres actuels
+                filterProducts();
+
+            } catch (error) {
+                console.error('Erreur lors du chargement des produits:', error);
+            }
+        }
+
+        async function filterProducts() {
+            try {
+                const searchTerm = document.getElementById('searchProducts').value.toLowerCase();
+                const selectedCategory = document.getElementById('categoryFilter').value;
+
+                let filteredProducts = currentFilteredData.products || [];
+
+                // Appliquer les filtres
+                if (searchTerm) {
+                    filteredProducts = filteredProducts.filter(product =>
+                        product.name.toLowerCase().includes(searchTerm) ||
+                        (product.details && product.details.toLowerCase().includes(searchTerm))
+                    );
+                }
+
+                if (selectedCategory) {
+                    filteredProducts = filteredProducts.filter(product =>
+                        product.category === selectedCategory
+                    );
+                }
+
+                displayProducts(filteredProducts);
+                updateTotalStock(filteredProducts);
+
+            } catch (error) {
+                console.error('Erreur lors du filtrage des produits:', error);
+            }
+        }
+
+        function displayProducts(products) {
+            const tableBody = document.getElementById('productsTableBody');
+            const gallery = document.getElementById('productsGallery');
+
+            if (isGalleryView) {
+                // Mode galerie
+                tableBody.innerHTML = '';
+                gallery.innerHTML = '';
+
+                products.forEach(product => {
+                    const card = createProductCard(product);
+                    gallery.appendChild(card);
+                });
+
+                document.getElementById('productsTable').classList.add('hidden');
+                gallery.classList.remove('hidden');
+            } else {
+                // Mode tableau
+                gallery.innerHTML = '';
+                tableBody.innerHTML = '';
+
+                products.forEach(product => {
+                    const row = createProductRow(product);
+                    tableBody.appendChild(row);
+                });
+
+                document.getElementById('productsTable').classList.remove('hidden');
+                gallery.classList.add('hidden');
+            }
+        }
+
+        function createProductRow(product) {
+            const row = document.createElement('tr');
+            row.className = 'hover:bg-gray-50 dark:hover:bg-gray-700';
+
+            // Déterminer la couleur de l'état
+            let stateColor;
+            switch (product.state) {
+                case 'Rupture': stateColor = 'text-red-600 bg-red-100'; break;
+                case 'Commande': stateColor = 'text-orange-600 bg-orange-100'; break;
+                default: stateColor = 'text-green-600 bg-green-100';
+            }
+
+            row.innerHTML = `
+                <td class="px-6 py-4 whitespace-nowrap">
+                    ${product.photo ? `<img src="${product.photo}" class="w-12 h-12 object-cover rounded cursor-pointer" onclick="openImageModal('${product.photo}')">` : '<div class="w-12 h-12 bg-gray-200 rounded flex items-center justify-center"><i class="fas fa-image text-gray-400"></i></div>'}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm font-medium text-gray-900 dark:text-white">${product.name}</div>
+                    <div class="text-sm text-gray-500 dark:text-gray-400">${product.details || ''}</div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">${product.category}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">${product.price} KMF</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">${product.stock}</td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <span class="px-2 py-1 text-xs font-semibold rounded-full ${stateColor}">${product.state}</span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                    <button onclick="openSaleModal(${product.id})" class="text-green-600 hover:text-green-900" title="Vendre">
+                        <i class="fas fa-shopping-cart"></i>
+                    </button>
+                    <button onclick="openPurchaseModal(${product.id})" class="text-blue-600 hover:text-blue-900" title="Approvisionner">
+                        <i class="fas fa-truck"></i>
+                    </button>
+                    <button onclick="editProduct(${product.id})" class="text-indigo-600 hover:text-indigo-900" title="Modifier">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button onclick="deleteProduct(${product.id})" class="text-red-600 hover:text-red-900" title="Supprimer">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+
+            return row;
+        }
+
+        function createProductCard(product) {
+            const card = document.createElement('div');
+            card.className = 'bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden';
+
+            // Déterminer la couleur de l'état
+            let stateColor;
+            switch (product.state) {
+                case 'Rupture': stateColor = 'text-red-600 bg-red-100'; break;
+                case 'Commande': stateColor = 'text-orange-600 bg-orange-100'; break;
+                default: stateColor = 'text-green-600 bg-green-100';
+            }
+
+            card.innerHTML = `
+                <div class="aspect-w-1 aspect-h-1">
+                    ${product.photo ? `<img src="${product.photo}" class="w-full h-48 object-cover cursor-pointer" onclick="openImageModal('${product.photo}')">` : '<div class="w-full h-48 bg-gray-200 flex items-center justify-center"><i class="fas fa-image text-gray-400 text-4xl"></i></div>'}
+                </div>
+                <div class="p-4">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">${product.name}</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-2">${product.category}</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">${product.details || ''}</p>
+                    <div class="flex justify-between items-center mb-3">
+                        <span class="text-lg font-bold text-primary">${product.price} KMF</span>
+                        <span class="px-2 py-1 text-xs font-semibold rounded-full ${stateColor}">${product.state}</span>
+                    </div>
+                    <div class="text-sm text-gray-600 dark:text-gray-400 mb-3">Stock: ${product.stock}</div>
+                    <div class="flex space-x-2">
+                        <button onclick="openSaleModal(${product.id})" class="flex-1 bg-green-500 text-white py-2 px-3 rounded-lg hover:bg-green-600 transition-colors">
+                            <i class="fas fa-shopping-cart mr-1"></i>Vendre
+                        </button>
+                        <button onclick="openPurchaseModal(${product.id})" class="flex-1 bg-blue-500 text-white py-2 px-3 rounded-lg hover:bg-blue-600 transition-colors">
+                            <i class="fas fa-truck mr-1"></i>Stock
+                        </button>
+                    </div>
+                    <div class="flex space-x-2 mt-2">
+                        <button onclick="editProduct(${product.id})" class="flex-1 bg-gray-500 text-white py-2 px-3 rounded-lg hover:bg-gray-600 transition-colors">
+                            <i class="fas fa-edit mr-1"></i>Modifier
+                        </button>
+                        <button onclick="deleteProduct(${product.id})" class="flex-1 bg-red-500 text-white py-2 px-3 rounded-lg hover:bg-red-600 transition-colors">
+                            <i class="fas fa-trash mr-1"></i>Supprimer
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            return card;
+        }
+
+        function updateTotalStock(products) {
+            const totalStock = products.reduce((sum, product) => sum + product.stock, 0);
+            document.getElementById('totalStock').textContent = totalStock;
+        }
+
+        function toggleProductView() {
+            isGalleryView = !isGalleryView;
+            const toggleBtn = document.getElementById('toggleViewBtn');
+
+            if (isGalleryView) {
+                toggleBtn.innerHTML = '<i class="fas fa-list mr-2"></i>Mode Liste';
+            } else {
+                toggleBtn.innerHTML = '<i class="fas fa-th mr-2"></i>Mode Galerie';
+            }
+
+            // Redisplayer avec la vue actuelle
+            if (currentFilteredData.products) {
+                filterProducts();
+            }
+        }
+
+        async function handleProductSubmit(e) {
+            e.preventDefault();
+
+            const formData = {
+                name: document.getElementById('productName').value,
+                category: document.getElementById('productCategory').value,
+                details: document.getElementById('productDetails').value,
+                price: parseFloat(document.getElementById('productPrice').value),
+                photo: document.getElementById('productPhotoPreview').src || null
+            };
+
+            const productId = document.getElementById('productId').value;
+
+            try {
+                if (productId) {
+                    // Modification
+                    formData.id = parseInt(productId);
+                    await db.update('products', formData);
+                } else {
+                    // Ajout
+                    await db.add('products', formData);
+                }
+
+                closeModal('productModal');
+                loadProducts();
+
+            } catch (error) {
+                console.error('Erreur lors de l\'enregistrement du produit:', error);
+            }
+        }
+
+        async function editProduct(id) {
+            try {
+                const product = await db.get('products', id);
+                if (product) {
+                    fillProductForm(product);
+                    openModal('productModal');
+                }
+            } catch (error) {
+                console.error('Erreur lors du chargement du produit:', error);
+            }
+        }
+
+        function fillProductForm(product) {
+            document.getElementById('productId').value = product.id;
+            document.getElementById('productName').value = product.name;
+            document.getElementById('productCategory').value = product.category;
+            document.getElementById('productDetails').value = product.details || '';
+            document.getElementById('productPrice').value = product.price;
+
+            if (product.photo) {
+                const preview = document.getElementById('productPhotoPreview');
+                preview.src = product.photo;
+                preview.classList.remove('hidden');
+            }
+
+            document.getElementById('productModalTitle').textContent = 'Modifier le produit';
+        }
+
+        async function deleteProduct(id) {
+            if (confirm('Êtes-vous sûr de vouloir supprimer ce produit ?')) {
+                try {
+                    await db.delete('products', id);
+                    loadProducts();
+                } catch (error) {
+                    console.error('Erreur lors de la suppression:', error);
+                }
+            }
+        }
+
+        function previewProductPhoto(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    const preview = document.getElementById('productPhotoPreview');
+                    preview.src = e.target.result;
+                    preview.classList.remove('hidden');
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        // ==========================
+        // GESTION DES VENTES
+        // ==========================
+
+        async function openSaleModal(productId) {
+            try {
+                const product = await db.get('products', productId);
+                if (product) {
+                    document.getElementById('saleProductId').value = product.id;
+                    document.getElementById('saleProductName').value = product.name;
+                    document.getElementById('salePrice').value = product.price;
+                    document.getElementById('saleQuantity').value = 1;
+                    calculateSaleTotal();
+                    openModal('saleModal');
+                }
+            } catch (error) {
+                console.error('Erreur lors de l\'ouverture de la vente:', error);
+            }
+        }
+
+        function calculateSaleTotal() {
+            const quantity = parseFloat(document.getElementById('saleQuantity').value) || 0;
+            const price = parseFloat(document.getElementById('salePrice').value) || 0;
+            const total = quantity * price;
+            document.getElementById('saleTotal').value = total;
+        }
+
+        async function handleSaleSubmit(e) {
+            e.preventDefault();
+
+            const productId = parseInt(document.getElementById('saleProductId').value);
+            const product = await db.get('products', productId);
+
+            const saleData = {
+                productId: productId,
+                article: document.getElementById('saleProductName').value,
+                quantity: parseInt(document.getElementById('saleQuantity').value),
+                price: parseFloat(document.getElementById('salePrice').value),
+                total: parseFloat(document.getElementById('saleTotal').value),
+                category: product.category
+            };
+
+            // Vérifier si le produit existe déjà dans le panier
+            const existingIndex = cart.findIndex(item => item.productId === productId && item.price === saleData.price);
+
+            if (existingIndex !== -1) {
+                // Mettre à jour la quantité et le total
+                cart[existingIndex].quantity += saleData.quantity;
+                cart[existingIndex].total = cart[existingIndex].quantity * cart[existingIndex].price;
+            } else {
+                // Ajouter un nouvel article au panier
+                cart.push(saleData);
+            }
+
+            updateCart();
+            showCart();
+            closeModal('saleModal');
+        }
+
+        function updateCart() {
+            const cartItems = document.getElementById('cartItems');
+            const cartTotal = document.getElementById('cartTotal');
+            const cartItemCount = document.getElementById('cartItemCount');
+
+            cartItems.innerHTML = '';
+            let total = 0;
+
+            cart.forEach((item, index) => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'flex justify-between items-center bg-gray-50 dark:bg-gray-700 p-2 rounded';
+                itemDiv.innerHTML = `
+                    <div>
+                        <div class="font-medium text-sm">${item.article}</div>
+                        <div class="text-xs text-gray-600 dark:text-gray-400">${item.quantity} x ${item.price} KMF</div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="font-bold">${item.total} KMF</span>
+                        <button onclick="removeFromCart(${index})" class="text-red-500 hover:text-red-700">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `;
+                cartItems.appendChild(itemDiv);
+                total += item.total;
+            });
+
+            cartTotal.textContent = `${total} KMF`;
+
+            // Mettre à jour le compteur d'articles
+            if (cart.length > 0) {
+                cartItemCount.textContent = cart.length;
+                cartItemCount.classList.remove('hidden');
+            } else {
+                cartItemCount.classList.add('hidden');
+            }
+
+            // Générer le numéro de facture
+            if (cart.length > 0 && !document.getElementById('invoiceNumber').value) {
+                generateInvoiceNumber();
+            }
+        }
+
+        function removeFromCart(index) {
+            cart.splice(index, 1);
+            updateCart();
+
+            if (cart.length === 0) {
+                hideCart();
+            }
+        }
+
+        function toggleCart() {
+            const cartContainer = document.getElementById('cartContainer');
+            if (cartContainer.classList.contains('hidden')) {
+                showCart();
+            } else {
+                hideCart();
+            }
+        }
+
+        function showCart() {
+            document.getElementById('cartContainer').classList.remove('hidden');
+            if (cart.length > 0 && !document.getElementById('invoiceNumber').value) {
+                generateInvoiceNumber();
+            }
+        }
+
+        function hideCart() {
+            document.getElementById('cartContainer').classList.add('hidden');
+        }
+
+        function clearCart() {
+            cart = [];
+            document.getElementById('invoiceNumber').value = '';
+            document.getElementById('customerName').value = '';
+            document.getElementById('customerContact').value = '';
+            document.getElementById('customerAddress').value = '';
+            document.getElementById('paymentType').value = 'Payée';
+            document.getElementById('paidAmount').value = '';
+            togglePaidAmountField();
+            updateCart();
+        }
+
+        async function generateInvoiceNumber() {
+            try {
+                const invoices = await db.getAll('invoices');
+                const nextNumber = invoices.length + 1;
+                const invoiceNumber = `F${nextNumber.toString().padStart(5, '0')}`;
+                document.getElementById('invoiceNumber').value = invoiceNumber;
+            } catch (error) {
+                console.error('Erreur lors de la génération du numéro de facture:', error);
+            }
+        }
+
+        function togglePaidAmountField() {
+            const paymentType = document.getElementById('paymentType').value;
+            const paidAmountContainer = document.getElementById('paidAmountContainer');
+
+            if (paymentType === 'Partielle') {
+                paidAmountContainer.style.display = 'block';
+            } else {
+                paidAmountContainer.style.display = 'none';
+            }
+        }
+
+        async function saveCart() {
+            if (cart.length === 0) return;
+
+            try {
+                const invoiceNumber = document.getElementById('invoiceNumber').value;
+                const customerName = document.getElementById('customerName').value;
+                const customerContact = document.getElementById('customerContact').value;
+                const customerAddress = document.getElementById('customerAddress').value;
+                const paymentType = document.getElementById('paymentType').value;
+                const paidAmount = parseFloat(document.getElementById('paidAmount').value) || 0;
+                const totalAmount = cart.reduce((sum, item) => sum + item.total, 0);
+                const currentDate = new Date().toISOString().split('T')[0];
+
+                // Enregistrer chaque vente
+                for (const item of cart) {
+                    const saleData = {
+                        ...item,
+                        payment: paymentType,
+                        paidAmount: paymentType === 'Partielle' ? (paidAmount * item.total / totalAmount) : (paymentType === 'Payée' ? item.total : 0),
+                        accounting: 'invalidée',
+                        date: currentDate,
+                        fact: invoiceNumber
+                    };
+                    await db.add('sales', saleData);
+                }
+
+                // Enregistrer la facture
+                const invoiceData = {
+                    fact: invoiceNumber,
+                    fullName: customerName,
+                    total: totalAmount,
+                    paidAmount: paymentType === 'Partielle' ? paidAmount : (paymentType === 'Payée' ? totalAmount : 0),
+                    payment: paymentType,
+                    accounting: 'invalidée',
+                    contact: customerContact,
+                    address: customerAddress,
+                    date: currentDate
+                };
+                await db.add('invoices', invoiceData);
+
+                // Réinitialiser le panier
+                clearCart();
+                hideCart();
+
+                // Recharger les données
+                if (currentTab === 'sales') await loadSales();
+                if (currentTab === 'invoices') await loadInvoices();
+                if (currentTab === 'products') await loadProducts();
+
+                alert('Vente enregistrée avec succès !');
+
+            } catch (error) {
+                console.error('Erreur lors de l\'enregistrement de la vente:', error);
+                alert('Erreur lors de l\'enregistrement');
+            }
+        }
+
+        async function loadSales() {
+            try {
+                const sales = await db.getAll('sales');
+                const categories = await db.getAll('categories');
+
+                // Remplir les filtres
+                const salesCategoryFilter = document.getElementById('salesCategoryFilter');
+                salesCategoryFilter.innerHTML = '<option value="">Toutes les catégories</option>';
+
+                categories.forEach(category => {
+                    salesCategoryFilter.innerHTML += `<option value="${category.category}">${category.category}</option>`;
+                });
+
+                // Remplir les filtres d'années
+                const years = [...new Set(sales.map(sale => new Date(sale.date).getFullYear()))].sort((a, b) => b - a);
+                const salesYearFilter = document.getElementById('salesYearFilter');
+                salesYearFilter.innerHTML = '<option value="">Toutes les années</option>';
+                years.forEach(year => {
+                    salesYearFilter.innerHTML += `<option value="${year}">${year}</option>`;
+                });
+
+                // Stocker les données pour le filtrage
+                currentFilteredData.sales = sales;
+
+                // Appliquer les filtres actuels
+                filterSales();
+
+            } catch (error) {
+                console.error('Erreur lors du chargement des ventes:', error);
+            }
+        }
+
+        function filterSales() {
+            try {
+                const searchTerm = document.getElementById('searchSales').value.toLowerCase();
+                const selectedYear = document.getElementById('salesYearFilter').value;
+                const selectedMonth = document.getElementById('salesMonthFilter').value;
+                const selectedCategory = document.getElementById('salesCategoryFilter').value;
+                const selectedAccounting = document.getElementById('salesAccountingFilter').value;
+                const selectedPayment = document.getElementById('salesPaymentFilter').value;
+
+                let filteredSales = currentFilteredData.sales || [];
+
+                // Appliquer les filtres
+                if (searchTerm) {
+                    filteredSales = filteredSales.filter(sale =>
+                        sale.article.toLowerCase().includes(searchTerm) ||
+                        (sale.fact && sale.fact.toLowerCase().includes(searchTerm))
+                    );
+                }
+
+                if (selectedYear) {
+                    filteredSales = filteredSales.filter(sale =>
+                        new Date(sale.date).getFullYear() == selectedYear
+                    );
+                }
+
+                if (selectedMonth) {
+                    filteredSales = filteredSales.filter(sale =>
+                        new Date(sale.date).getMonth() + 1 == selectedMonth
+                    );
+                }
+
+                if (selectedCategory) {
+                    filteredSales = filteredSales.filter(sale =>
+                        sale.category === selectedCategory
+                    );
+                }
+
+                if (selectedAccounting) {
+                    filteredSales = filteredSales.filter(sale =>
+                        sale.accounting === selectedAccounting
+                    );
+                }
+
+                if (selectedPayment) {
+                    filteredSales = filteredSales.filter(sale =>
+                        sale.payment === selectedPayment
+                    );
+                }
+
+                displaySales(filteredSales);
+                updateSalesStats(filteredSales);
+
+            } catch (error) {
+                console.error('Erreur lors du filtrage des ventes:', error);
+            }
+        }
+
+        function displaySales(sales) {
+            const tableBody = document.getElementById('salesTableBody');
+            tableBody.innerHTML = '';
+
+            sales.forEach(sale => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50 dark:hover:bg-gray-700';
+
+                // Déterminer la couleur du règlement
+                let paymentColor;
+                switch (sale.payment) {
+                    case 'Payée': paymentColor = 'text-green-600 bg-green-100'; break;
+                    case 'Impayée': paymentColor = 'text-red-600 bg-red-100'; break;
+                    case 'Partielle': paymentColor = 'text-orange-600 bg-orange-100'; break;
+                    default: paymentColor = 'text-gray-600 bg-gray-100';
+                }
+
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">${sale.article}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">${sale.quantity}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">${sale.price} KMF</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">${sale.total} KMF</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 py-1 text-xs font-semibold rounded-full ${paymentColor}">${sale.payment}</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">${sale.date}</td>
+                    <td class="hidden px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                        ${(currentUser.role === 'Admin' || sale.accounting !== 'validée') ? `
+                            <button onclick="editSale(${sale.id})" class="text-indigo-600 hover:text-indigo-900" title="Modifier">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button onclick="deleteSale(${sale.id})" class="text-red-600 hover:text-red-900" title="Supprimer">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        ` : '<span class="text-gray-400">Validée</span>'}
+                        ${currentUser.role === 'Admin' ? `
+                            <button onclick="toggleSaleAccounting(${sale.id})" class="text-purple-600 hover:text-purple-900" title="Comptabilisation">
+                                <i class="fas fa-${sale.accounting === 'validée' ? 'lock' : 'unlock'}"></i>
+                            </button>
+                        ` : ''}
+                    </td>
+                `;
+
+                tableBody.appendChild(row);
+            });
+        }
+
+        function updateSalesStats(sales) {
+            const totalQty = sales.reduce((sum, sale) => sum + sale.quantity, 0);
+            const totalRevenue = sales.reduce((sum, sale) => sum + sale.total, 0);
+
+            document.getElementById('totalSoldQty').textContent = totalQty;
+            document.getElementById('totalRevenue').textContent = `${totalRevenue} KMF`;
+        }
+
+        async function deleteSale(id) {
+            if (confirm('Êtes-vous sûr de vouloir supprimer cette vente ?')) {
+                try {
+                    await db.delete('sales', id);
+                    loadSales();
+                    if (currentTab === 'products') await loadProducts();
+                } catch (error) {
+                    console.error('Erreur lors de la suppression:', error);
+                }
+            }
+        }
+
+        async function toggleSaleAccounting(id) {
+            try {
+                const sale = await db.get('sales', id);
+                sale.accounting = sale.accounting === 'validée' ? 'invalidée' : 'validée';
+                await db.update('sales', sale);
+                loadSales();
+                if (currentTab === 'products') await loadProducts();
+            } catch (error) {
+                console.error('Erreur lors de la mise à jour:', error);
+            }
+        }
+
+        async function editSale(id) {
+            try {
+                const sale = await db.get('sales', id);
+                if (sale) {
+                    // Remplir le formulaire de vente avec les données existantes
+                    document.getElementById('saleProductId').value = sale.productId;
+                    document.getElementById('saleProductName').value = sale.article;
+                    document.getElementById('saleQuantity').value = sale.quantity;
+                    document.getElementById('salePrice').value = sale.price;
+                    document.getElementById('saleTotal').value = sale.total;
+
+                    // Stocker l'ID de la vente à modifier
+                    document.getElementById('saleForm').dataset.editId = id;
+
+                    openModal('saleModal');
+                }
+            } catch (error) {
+                console.error('Erreur lors de l\'édition de la vente:', error);
+            }
+        }
+
+        // Modifiez la fonction handleSaleSubmit pour gérer les modifications
+        async function handleSaleSubmit(e) {
+            e.preventDefault();
+
+            const productId = parseInt(document.getElementById('saleProductId').value);
+            const product = await db.get('products', productId);
+
+            const saleData = {
+                productId: productId,
+                article: document.getElementById('saleProductName').value,
+                quantity: parseInt(document.getElementById('saleQuantity').value),
+                price: parseFloat(document.getElementById('salePrice').value),
+                total: parseFloat(document.getElementById('saleTotal').value),
+                category: product.category,
+                payment: 'Payée', // Valeur par défaut, sera mise à jour lors de l'enregistrement du panier
+                accounting: 'invalidée', // Valeur par défaut
+                date: new Date().toISOString().split('T')[0]
+            };
+
+            const editId = e.target.dataset.editId;
+
+            try {
+                if (editId) {
+                    // Mise à jour d'une vente existante
+                    saleData.id = parseInt(editId);
+                    await db.update('sales', saleData);
+                    delete e.target.dataset.editId; // Supprimer l'ID d'édition
+                } else {
+                    // Ajouter au panier (comme avant)
+                    const existingIndex = cart.findIndex(item => item.productId === productId && item.price === saleData.price);
+
+                    if (existingIndex !== -1) {
+                        cart[existingIndex].quantity += saleData.quantity;
+                        cart[existingIndex].total = cart[existingIndex].quantity * cart[existingIndex].price;
+                    } else {
+                        cart.push(saleData);
+                    }
+
+                    updateCart();
+                    showCart();
+                }
+
+                closeModal('saleModal');
+                if (currentTab === 'sales') await loadSales();
+                if (currentTab === 'products') await loadProducts();
+
+            } catch (error) {
+                console.error('Erreur lors de l\'enregistrement de la vente:', error);
+            }
+        }
+
+        // ==========================
+        // GESTION DES ACHATS
+        // ==========================
+
+        async function openPurchaseModal(productId) {
+            try {
+                const product = await db.get('products', productId);
+                if (product) {
+                    // Calculer le stock actuel
+                    const purchases = await db.getAll('purchases');
+                    const sales = await db.getAll('sales');
+
+                    const totalPurchased = purchases
+                        .filter(p => p.product === product.name && p.accounting === 'validée')
+                        .reduce((sum, p) => sum + p.quantity, 0);
+
+                    const totalSold = sales
+                        .filter(s => s.article === product.name && s.accounting === 'validée')
+                        .reduce((sum, s) => sum + s.quantity, 0);
+
+                    const currentStock = totalPurchased - totalSold;
+
+                    document.getElementById('purchaseProductId').value = product.id;
+                    document.getElementById('purchaseProductName').value = product.name;
+                    document.getElementById('currentStock').value = currentStock;
+                    document.getElementById('purchaseQuantity').value = '';
+                    document.getElementById('purchasePrice').value = '';
+                    document.getElementById('purchaseTotal').value = '';
+                    document.getElementById('supplier').value = '';
+
+                    openModal('purchaseModal');
+                }
+            } catch (error) {
+                console.error('Erreur lors de l\'ouverture de l\'achat:', error);
+            }
+        }
+
+        function calculatePurchaseTotal() {
+            const quantity = parseFloat(document.getElementById('purchaseQuantity').value) || 0;
+            const price = parseFloat(document.getElementById('purchasePrice').value) || 0;
+            const total = quantity * price;
+            document.getElementById('purchaseTotal').value = total;
+        }
+
+        async function handlePurchaseSubmit(e) {
+            e.preventDefault();
+
+            const productId = parseInt(document.getElementById('purchaseProductId').value);
+            const product = await db.get('products', productId);
+
+            const purchaseData = {
+                product: document.getElementById('purchaseProductName').value,
+                quantity: parseInt(document.getElementById('purchaseQuantity').value),
+                purchasePrice: parseFloat(document.getElementById('purchasePrice').value),
+                total: parseFloat(document.getElementById('purchaseTotal').value),
+                accounting: 'invalidée',
+                category: product.category,
+                date: new Date().toISOString().split('T')[0],
+                supplier: document.getElementById('supplier').value
+            };
+
+            try {
+                await db.add('purchases', purchaseData);
+                closeModal('purchaseModal');
+
+                // Recharger les données
+                if (currentTab === 'purchases') await loadPurchases();
+                if (currentTab === 'products') await loadProducts();
+
+                alert('Achat enregistré avec succès !');
+
+            } catch (error) {
+                console.error('Erreur lors de l\'enregistrement de l\'achat:', error);
+                alert('Erreur lors de l\'enregistrement');
+            }
+        }
+
+        async function loadPurchases() {
+            try {
+                const purchases = await db.getAll('purchases');
+                const categories = await db.getAll('categories');
+
+                // Remplir les filtres
+                const purchasesCategoryFilter = document.getElementById('purchasesCategoryFilter');
+                purchasesCategoryFilter.innerHTML = '<option value="">Toutes les catégories</option>';
+
+                categories.forEach(category => {
+                    purchasesCategoryFilter.innerHTML += `<option value="${category.category}">${category.category}</option>`;
+                });
+
+                // Remplir les filtres d'années
+                const years = [...new Set(purchases.map(purchase => new Date(purchase.date).getFullYear()))].sort((a, b) => b - a);
+                const purchasesYearFilter = document.getElementById('purchasesYearFilter');
+                purchasesYearFilter.innerHTML = '<option value="">Toutes les années</option>';
+                years.forEach(year => {
+                    purchasesYearFilter.innerHTML += `<option value="${year}">${year}</option>`;
+                });
+
+                // Stocker les données pour le filtrage
+                currentFilteredData.purchases = purchases;
+
+                // Appliquer les filtres actuels
+                filterPurchases();
+
+            } catch (error) {
+                console.error('Erreur lors du chargement des achats:', error);
+            }
+        }
+
+        function filterPurchases() {
+            try {
+                const searchTerm = document.getElementById('searchPurchases').value.toLowerCase();
+                const selectedYear = document.getElementById('purchasesYearFilter').value;
+                const selectedMonth = document.getElementById('purchasesMonthFilter').value;
+                const selectedCategory = document.getElementById('purchasesCategoryFilter').value;
+                const selectedAccounting = document.getElementById('purchasesAccountingFilter').value;
+
+                let filteredPurchases = currentFilteredData.purchases || [];
+
+                // Appliquer les filtres
+                if (searchTerm) {
+                    filteredPurchases = filteredPurchases.filter(purchase =>
+                        purchase.product.toLowerCase().includes(searchTerm) ||
+                        (purchase.supplier && purchase.supplier.toLowerCase().includes(searchTerm))
+                    );
+                }
+
+                if (selectedYear) {
+                    filteredPurchases = filteredPurchases.filter(purchase =>
+                        new Date(purchase.date).getFullYear() == selectedYear
+                    );
+                }
+
+                if (selectedMonth) {
+                    filteredPurchases = filteredPurchases.filter(purchase =>
+                        new Date(purchase.date).getMonth() + 1 == selectedMonth
+                    );
+                }
+
+                if (selectedCategory) {
+                    filteredPurchases = filteredPurchases.filter(purchase =>
+                        purchase.category === selectedCategory
+                    );
+                }
+
+                if (selectedAccounting) {
+                    filteredPurchases = filteredPurchases.filter(purchase =>
+                        purchase.accounting === selectedAccounting
+                    );
+                }
+
+                displayPurchases(filteredPurchases);
+                updatePurchasesStats(filteredPurchases);
+
+            } catch (error) {
+                console.error('Erreur lors du filtrage des achats:', error);
+            }
+        }
+
+        function displayPurchases(purchases) {
+            const tableBody = document.getElementById('purchasesTableBody');
+            tableBody.innerHTML = '';
+
+            purchases.forEach(purchase => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50 dark:hover:bg-gray-700';
+
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">${purchase.product}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">${purchase.quantity}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">${purchase.purchasePrice} KMF</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">${purchase.total} KMF</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">${purchase.supplier || '-'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">${purchase.date}</td>
+                    <td class="hidden px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                        ${(currentUser.role === 'Admin' || purchase.accounting !== 'validée') ? `
+                            <button onclick="editPurchase(${purchase.id})" class="text-indigo-600 hover:text-indigo-900" title="Modifier">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button onclick="deletePurchase(${purchase.id})" class="text-red-600 hover:text-red-900" title="Supprimer">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        ` : '<span class="text-gray-400">Validée</span>'}
+                        ${currentUser.role === 'Admin' ? `
+                            <button onclick="togglePurchaseAccounting(${purchase.id})" class="text-purple-600 hover:text-purple-900" title="Comptabilisation">
+                                <i class="fas fa-${purchase.accounting === 'validée' ? 'lock' : 'unlock'}"></i>
+                            </button>
+                        ` : ''}
+                    </td>
+                `;
+
+                tableBody.appendChild(row);
+            });
+        }
+
+        function updatePurchasesStats(purchases) {
+            const totalQty = purchases.reduce((sum, purchase) => sum + purchase.quantity, 0);
+            const totalCost = purchases.reduce((sum, purchase) => sum + purchase.total, 0);
+
+            document.getElementById('totalPurchasedQty').textContent = totalQty;
+            document.getElementById('totalCost').textContent = `${totalCost} KMF`;
+        }
+
+        async function deletePurchase(id) {
+            if (confirm('Êtes-vous sûr de vouloir supprimer cet achat ?')) {
+                try {
+                    await db.delete('purchases', id);
+                    loadPurchases();
+                    if (currentTab === 'products') await loadProducts();
+                } catch (error) {
+                    console.error('Erreur lors de la suppression:', error);
+                }
+            }
+        }
+
+        async function togglePurchaseAccounting(id) {
+            try {
+                const purchase = await db.get('purchases', id);
+                purchase.accounting = purchase.accounting === 'validée' ? 'invalidée' : 'validée';
+                await db.update('purchases', purchase);
+                loadPurchases();
+                if (currentTab === 'products') await loadProducts();
+            } catch (error) {
+                console.error('Erreur lors de la mise à jour:', error);
+            }
+        }
+
+        async function editPurchase(id) {
+            try {
+                const purchase = await db.get('purchases', id);
+                if (purchase) {
+                    // Trouver le produit correspondant
+                    const products = await db.getAll('products');
+                    const product = products.find(p => p.name === purchase.product);
+
+                    if (product) {
+                        document.getElementById('purchaseProductId').value = product.id;
+                        document.getElementById('purchaseProductName').value = purchase.product;
+                        document.getElementById('purchaseQuantity').value = purchase.quantity;
+                        document.getElementById('purchasePrice').value = purchase.purchasePrice;
+                        document.getElementById('purchaseTotal').value = purchase.total;
+                        document.getElementById('supplier').value = purchase.supplier || '';
+
+                        // Stocker l'ID de l'achat à modifier
+                        document.getElementById('purchaseForm').dataset.editId = id;
+
+                        openModal('purchaseModal');
+                    }
+                }
+            } catch (error) {
+                console.error('Erreur lors de l\'édition de l\'achat:', error);
+            }
+        }
+
+        // Modifiez la fonction handlePurchaseSubmit pour gérer les modifications
+        async function handlePurchaseSubmit(e) {
+            e.preventDefault();
+
+            const productId = parseInt(document.getElementById('purchaseProductId').value);
+            const product = await db.get('products', productId);
+
+            const purchaseData = {
+                product: document.getElementById('purchaseProductName').value,
+                quantity: parseInt(document.getElementById('purchaseQuantity').value),
+                purchasePrice: parseFloat(document.getElementById('purchasePrice').value),
+                total: parseFloat(document.getElementById('purchaseTotal').value),
+                accounting: 'invalidée',
+                category: product.category,
+                date: new Date().toISOString().split('T')[0],
+                supplier: document.getElementById('supplier').value
+            };
+
+            const editId = e.target.dataset.editId;
+
+            try {
+                if (editId) {
+                    // Mise à jour d'un achat existant
+                    purchaseData.id = parseInt(editId);
+                    await db.update('purchases', purchaseData);
+                    delete e.target.dataset.editId;
+                } else {
+                    // Création d'un nouvel achat (comme avant)
+                    await db.add('purchases', purchaseData);
+                }
+
+                closeModal('purchaseModal');
+
+                // Recharger les données
+                if (currentTab === 'purchases') await loadPurchases();
+                if (currentTab === 'products') await loadProducts();
+
+                alert('Achat enregistré avec succès !');
+
+            } catch (error) {
+                console.error('Erreur lors de l\'enregistrement de l\'achat:', error);
+                alert('Erreur lors de l\'enregistrement');
+            }
+        }
+
+        // ==========================
+        // GESTION DES FACTURES
+        // ==========================
+
+        async function loadInvoices() {
+            try {
+                const invoices = await db.getAll('invoices');
+
+                // Remplir les filtres d'années
+                const years = [...new Set(invoices.map(invoice => new Date(invoice.date).getFullYear()))].sort((a, b) => b - a);
+                const invoicesYearFilter = document.getElementById('invoicesYearFilter');
+                invoicesYearFilter.innerHTML = '<option value="">Toutes les années</option>';
+                years.forEach(year => {
+                    invoicesYearFilter.innerHTML += `<option value="${year}">${year}</option>`;
+                });
+
+                // Stocker les données pour le filtrage
+                currentFilteredData.invoices = invoices;
+
+                // Appliquer les filtres actuels
+                filterInvoices();
+
+            } catch (error) {
+                console.error('Erreur lors du chargement des factures:', error);
+            }
+        }
+
+        function filterInvoices() {
+            try {
+                const searchTerm = document.getElementById('searchInvoices').value.toLowerCase();
+                const selectedYear = document.getElementById('invoicesYearFilter').value;
+                const selectedMonth = document.getElementById('invoicesMonthFilter').value;
+                const selectedPayment = document.getElementById('invoicesPaymentFilter').value;
+
+                let filteredInvoices = currentFilteredData.invoices || [];
+
+                // Appliquer les filtres
+                if (searchTerm) {
+                    filteredInvoices = filteredInvoices.filter(invoice =>
+                        invoice.fact.toLowerCase().includes(searchTerm) ||
+                        (invoice.fullName && invoice.fullName.toLowerCase().includes(searchTerm))
+                    );
+                }
+
+                if (selectedYear) {
+                    filteredInvoices = filteredInvoices.filter(invoice =>
+                        new Date(invoice.date).getFullYear() == selectedYear
+                    );
+                }
+
+                if (selectedMonth) {
+                    filteredInvoices = filteredInvoices.filter(invoice =>
+                        new Date(invoice.date).getMonth() + 1 == selectedMonth
+                    );
+                }
+
+                if (selectedPayment) {
+                    filteredInvoices = filteredInvoices.filter(invoice =>
+                        invoice.payment === selectedPayment
+                    );
+                }
+
+                displayInvoices(filteredInvoices);
+                updateInvoicesStats(filteredInvoices);
+
+            } catch (error) {
+                console.error('Erreur lors du filtrage des factures:', error);
+            }
+        }
+
+        function displayInvoices(invoices) {
+            const tableBody = document.getElementById('invoicesTableBody');
+            tableBody.innerHTML = '';
+
+            invoices.forEach(invoice => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50 dark:hover:bg-gray-700';
+
+                // Déterminer la couleur du règlement
+                let paymentColor;
+                switch (invoice.payment) {
+                    case 'Payée': paymentColor = 'text-green-600 bg-green-100'; break;
+                    case 'Impayée': paymentColor = 'text-red-600 bg-red-100'; break;
+                    case 'Partielle': paymentColor = 'text-orange-600 bg-orange-100'; break;
+                    default: paymentColor = 'text-gray-600 bg-gray-100';
+                }
+
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">${invoice.fact}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">${invoice.fullName || '-'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">${invoice.total} KMF</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">${invoice.paidAmount} KMF</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 py-1 text-xs font-semibold rounded-full ${paymentColor}">${invoice.payment}</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">${invoice.date}</td>
+                    <td class="hidden px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                        <button onclick="printInvoiceReceipt('${invoice.fact}')" class="text-green-600 hover:text-green-900" title="Reçu">
+                            <i class="fas fa-receipt"></i>
+                        </button>
+                        ${(currentUser.role === 'Admin' || invoice.accounting !== 'validée') ? `
+                            <button onclick="editInvoice('${invoice.fact}')" class="text-indigo-600 hover:text-indigo-900" title="Modifier">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button onclick="deleteInvoice('${invoice.fact}')" class="text-red-600 hover:text-red-900" title="Supprimer">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        ` : '<span class="text-gray-400">Validée</span>'}
+                        ${currentUser.role === 'Admin' ? `
+                            <button onclick="toggleInvoiceAccounting('${invoice.fact}')" class="text-purple-600 hover:text-purple-900" title="Comptabilisation">
+                                <i class="fas fa-${invoice.accounting === 'validée' ? 'lock' : 'unlock'}"></i>
+                            </button>
+                        ` : ''}
+                    </td>
+                `;
+
+                tableBody.appendChild(row);
+            });
+        }
+
+        function updateInvoicesStats(invoices) {
+            document.getElementById('totalInvoices').textContent = invoices.length;
+        }
+
+        async function printInvoiceReceipt(invoiceNumber) {
+            try {
+                const invoice = await db.get('invoices', invoiceNumber);
+                const sales = await db.getAll('sales');
+                const invoiceSales = sales.filter(sale => sale.fact === invoiceNumber);
+
+                const receiptContent = document.getElementById('receiptContent');
+
+                let itemsHtml = '';
+                invoiceSales.forEach(sale => {
+                    itemsHtml += `
+                        <div class="flex justify-between">
+                            <span>${sale.article} x${sale.quantity}</span>
+                            <span>${sale.total} KMF</span>
+                        </div>
+                    `;
+                });
+
+                receiptContent.innerHTML = `
+                    <div class="text-center mb-4">
+                        <h3 class="font-bold">DigiPharma Simboussa B/Est</h3>
+                        <p class="text-xs">+269 409 58 28</p>
+                        <p class="text-xs">------------------------</p>
+                    </div>
+                    <div class="mb-4">
+                        <p><strong>Facture:</strong> ${invoice.fact}</p>
+                        <p><strong>Date:</strong> ${invoice.date}</p>
+                        <p><strong>Client:</strong> ${invoice.fullName || 'Non spécifié'}</p>
+                        <p><strong>Contact:</strong> ${invoice.contact || 'Non spécifié'}</p>
+                    </div>
+                    <div class="mb-4">
+                        <p class="text-xs">------------------------</p>
+                        <p class="font-bold mb-2">Articles:</p>
+                        ${itemsHtml}
+                        <p class="text-xs">------------------------</p>
+                    </div>
+                    <div class="mb-4">
+                        <div class="flex justify-between font-bold">
+                            <span>Total:</span>
+                            <span>${invoice.total} KMF</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Payé:</span>
+                            <span>${invoice.paidAmount} KMF</span>
+                        </div>
+                        ${invoice.payment === 'Partielle' ? `
+                            <div class="flex justify-between">
+                                <span>Reste:</span>
+                                <span>${invoice.total - invoice.paidAmount} KMF</span>
+                            </div>
+                        ` : ''}
+                        <div class="flex justify-between">
+                            <span>Statut:</span>
+                            <span>${invoice.payment}</span>
+                        </div>
+                    </div>
+                    <div class="text-center text-xs">
+                        <p>Merci pour votre visite!</p>
+                        <p>------------------------</p>
+                    </div>
+                `;
+
+                openModal('receiptModal');
+
+            } catch (error) {
+                console.error('Erreur lors de la génération du reçu:', error);
+            }
+        }
+
+        function printReceipt() {
+            window.print();
+        }
+
+        async function deleteInvoice(invoiceNumber) {
+            if (confirm('Êtes-vous sûr de vouloir supprimer cette facture ?')) {
+                try {
+                    await db.delete('invoices', invoiceNumber);
+
+                    // Supprimer aussi les ventes associées
+                    const sales = await db.getAll('sales');
+                    const invoiceSales = sales.filter(sale => sale.fact === invoiceNumber);
+
+                    for (const sale of invoiceSales) {
+                        await db.delete('sales', sale.id);
+                    }
+
+                    loadInvoices();
+                    if (currentTab === 'sales') await loadSales();
+                    if (currentTab === 'products') await loadProducts();
+                } catch (error) {
+                    console.error('Erreur lors de la suppression:', error);
+                }
+            }
+        }
+
+        async function toggleInvoiceAccounting(invoiceNumber) {
+            try {
+                const invoice = await db.get('invoices', invoiceNumber);
+                invoice.accounting = invoice.accounting === 'validée' ? 'invalidée' : 'validée';
+                await db.update('invoices', invoice);
+
+                // Mettre à jour aussi les ventes associées
+                const sales = await db.getAll('sales');
+                const invoiceSales = sales.filter(sale => sale.fact === invoiceNumber);
+
+                for (const sale of invoiceSales) {
+                    sale.accounting = invoice.accounting;
+                    await db.update('sales', sale);
+                }
+
+                loadInvoices();
+            } catch (error) {
+                console.error('Erreur lors de la mise à jour:', error);
+            }
+        }
+
+        async function editInvoice(invoiceNumber) {
+            try {
+                const invoice = await db.get('invoices', invoiceNumber);
+                if (invoice) {
+                    // Remplir le panier avec les articles de la facture
+                    const sales = await db.getAll('sales');
+                    const invoiceSales = sales.filter(sale => sale.fact === invoiceNumber);
+
+                    // Vider le panier actuel
+                    cart = [];
+
+                    // Ajouter chaque vente au panier
+                    invoiceSales.forEach(sale => {
+                        cart.push({
+                            productId: sale.productId,
+                            article: sale.article,
+                            quantity: sale.quantity,
+                            price: sale.price,
+                            total: sale.total,
+                            category: sale.category
+                        });
+                    });
+
+                    // Remplir les informations client
+                    document.getElementById('invoiceNumber').value = invoice.fact;
+                    document.getElementById('customerName').value = invoice.fullName || '';
+                    document.getElementById('customerContact').value = invoice.contact || '';
+                    document.getElementById('customerAddress').value = invoice.address || '';
+                    document.getElementById('paymentType').value = invoice.payment;
+
+                    if (invoice.payment === 'Partielle') {
+                        document.getElementById('paidAmount').value = invoice.paidAmount;
+                        document.getElementById('paidAmountContainer').style.display = 'block';
+                    } else {
+                        document.getElementById('paidAmountContainer').style.display = 'none';
+                    }
+
+                    // Mettre à jour le panier
+                    updateCart();
+
+                    // Afficher le panier
+                    showCart();
+
+                    // Stocker le numéro de facture à modifier
+                    document.getElementById('saveCartBtn').dataset.editInvoice = invoiceNumber;
+                }
+            } catch (error) {
+                console.error('Erreur lors de l\'édition de la facture:', error);
+            }
+        }
+
+        // Modifiez la fonction saveCart pour gérer les modifications
+        async function saveCart() {
+            if (cart.length === 0) return;
+
+            try {
+                const invoiceNumber = document.getElementById('invoiceNumber').value;
+                const customerName = document.getElementById('customerName').value;
+                const customerContact = document.getElementById('customerContact').value;
+                const customerAddress = document.getElementById('customerAddress').value;
+                const paymentType = document.getElementById('paymentType').value;
+                const paidAmount = parseFloat(document.getElementById('paidAmount').value) || 0;
+                const totalAmount = cart.reduce((sum, item) => sum + item.total, 0);
+                const currentDate = new Date().toISOString().split('T')[0];
+
+                const editInvoiceNumber = document.getElementById('saveCartBtn').dataset.editInvoice;
+
+                if (editInvoiceNumber) {
+                    // Supprimer les anciennes ventes associées à cette facture
+                    const sales = await db.getAll('sales');
+                    const invoiceSales = sales.filter(sale => sale.fact === editInvoiceNumber);
+
+                    for (const sale of invoiceSales) {
+                        await db.delete('sales', sale.id);
+                    }
+
+                    // Supprimer l'ancienne facture
+                    await db.delete('invoices', editInvoiceNumber);
+
+                    // Supprimer le flag d'édition
+                    delete document.getElementById('saveCartBtn').dataset.editInvoice;
+                }
+
+                // Enregistrer chaque vente
+                for (const item of cart) {
+                    const saleData = {
+                        ...item,
+                        payment: paymentType,
+                        paidAmount: paymentType === 'Partielle' ? (paidAmount * item.total / totalAmount) : (paymentType === 'Payée' ? item.total : 0),
+                        accounting: 'invalidée',
+                        date: currentDate,
+                        fact: invoiceNumber
+                    };
+                    await db.add('sales', saleData);
+                }
+
+                // Enregistrer la facture
+                const invoiceData = {
+                    fact: invoiceNumber,
+                    fullName: customerName,
+                    total: totalAmount,
+                    paidAmount: paymentType === 'Partielle' ? paidAmount : (paymentType === 'Payée' ? totalAmount : 0),
+                    payment: paymentType,
+                    accounting: 'invalidée',
+                    contact: customerContact,
+                    address: customerAddress,
+                    date: currentDate
+                };
+                await db.add('invoices', invoiceData);
+
+                // Réinitialiser le panier
+                clearCart();
+                hideCart();
+
+                // Recharger les données
+                if (currentTab === 'sales') await loadSales();
+                if (currentTab === 'invoices') await loadInvoices();
+                if (currentTab === 'products') await loadProducts();
+
+                alert('Facture enregistrée avec succès !');
+
+            } catch (error) {
+                console.error('Erreur lors de l\'enregistrement de la facture:', error);
+                alert('Erreur lors de l\'enregistrement');
+            }
+        }
+
+        // ==========================
+        // GESTION DES CATÉGORIES
+        // ==========================
+
+        async function loadCategories() {
+            try {
+                const categories = await db.getAll('categories');
+                displayCategories(categories);
+            } catch (error) {
+                console.error('Erreur lors du chargement des catégories:', error);
+            }
+        }
+
+        function displayCategories(categories) {
+            const tableBody = document.getElementById('categoriesTableBody');
+            tableBody.innerHTML = '';
+
+            categories.forEach(category => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50 dark:hover:bg-gray-700';
+
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">${category.id}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">${category.category}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <button onclick="deleteCategory(${category.id})" class="text-red-600 hover:text-red-900" title="Supprimer">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+
+                tableBody.appendChild(row);
+            });
+        }
+
+        async function handleCategorySubmit(e) {
+            e.preventDefault();
+
+            const categoryData = {
+                category: document.getElementById('categoryName').value
+            };
+
+            try {
+                await db.add('categories', categoryData);
+                closeModal('categoryModal');
+                loadCategories();
+
+                // Recharger les selects de catégories
+                if (currentTab === 'products') await loadProducts();
+
+            } catch (error) {
+                console.error('Erreur lors de l\'enregistrement de la catégorie:', error);
+            }
+        }
+
+        async function deleteCategory(id) {
+            if (confirm('Êtes-vous sûr de vouloir supprimer cette catégorie ?')) {
+                try {
+                    await db.delete('categories', id);
+                    loadCategories();
+
+                    // Recharger les selects de catégories
+                    if (currentTab === 'products') await loadProducts();
+                } catch (error) {
+                    console.error('Erreur lors de la suppression:', error);
+                }
+            }
+        }
+
+        // ==========================
+        // GESTION DES UTILISATEURS
+        // ==========================
+
+        async function loadUsers() {
+            try {
+                const users = await db.getAll('users');
+                displayUsers(users);
+            } catch (error) {
+                console.error('Erreur lors du chargement des utilisateurs:', error);
+            }
+        }
+
+        function displayUsers(users) {
+            const tableBody = document.getElementById('usersTableBody');
+            tableBody.innerHTML = '';
+
+            users.forEach(user => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50 dark:hover:bg-gray-700';
+
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">${user.id}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">${user.password}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 py-1 text-xs font-semibold rounded-full ${user.role === 'Admin' ? 'text-purple-600 bg-purple-100' : 'text-blue-600 bg-blue-100'}">${user.role}</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <button onclick="deleteUser(${user.id})" class="text-red-600 hover:text-red-900" title="Supprimer">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+
+                tableBody.appendChild(row);
+            });
+        }
+
+        async function handleUserSubmit(e) {
+            e.preventDefault();
+
+            const userData = {
+                password: document.getElementById('userPassword').value,
+                role: document.getElementById('userRole').value
+            };
+
+            try {
+                await db.add('users', userData);
+                closeModal('userModal');
+                loadUsers();
+
+            } catch (error) {
+                console.error('Erreur lors de l\'enregistrement de l\'utilisateur:', error);
+            }
+        }
+
+        async function deleteUser(id) {
+            if (confirm('Êtes-vous sûr de vouloir supprimer cet utilisateur ?')) {
+                try {
+                    await db.delete('users', id);
+                    loadUsers();
+                } catch (error) {
+                    console.error('Erreur lors de la suppression:', error);
+                }
+            }
+        }
+
+        // ==========================
+        // TABLEAU DE BORD
+        // ==========================
+
+        async function updateDashboard() {
+            try {
+                const sales = await db.getAll('sales');
+                const purchases = await db.getAll('purchases');
+
+                // Filtrer par année et mois si spécifié
+                const yearFilter = document.getElementById('yearFilter').value;
+                const monthFilter = document.getElementById('monthFilter').value;
+
+                let filteredSales = sales;
+                let filteredPurchases = purchases;
+
+                if (yearFilter) {
+                    filteredSales = sales.filter(sale => new Date(sale.date).getFullYear() == yearFilter);
+                    filteredPurchases = purchases.filter(purchase => new Date(purchase.date).getFullYear() == yearFilter);
+                }
+
+                if (monthFilter) {
+                    filteredSales = filteredSales.filter(sale => new Date(sale.date).getMonth() + 1 == monthFilter);
+                    filteredPurchases = filteredPurchases.filter(purchase => new Date(purchase.date).getMonth() + 1 == monthFilter);
+                }
+
+                // Calculer les indicateurs
+                const totalSales = filteredSales.reduce((sum, sale) => sum + sale.total, 0);
+                const totalPurchases = filteredPurchases.reduce((sum, purchase) => sum + purchase.total, 0);
+                const profit = totalSales - totalPurchases;
+
+                // Mettre à jour l'affichage
+                document.getElementById('totalSales').textContent = `${totalSales} KMF`;
+                document.getElementById('totalPurchases').textContent = `${totalPurchases} KMF`;
+                document.getElementById('totalProfit').textContent = `${profit} KMF`;
+
+                // Remplir les filtres d'années avec les données existantes
+                const allSales = await db.getAll('sales');
+                const allPurchases = await db.getAll('purchases');
+                const allDates = [...allSales.map(s => s.date), ...allPurchases.map(p => p.date)];
+                const years = [...new Set(allDates.map(date => new Date(date).getFullYear()))].sort((a, b) => b - a);
+
+                const yearSelect = document.getElementById('yearFilter');
+                const currentValue = yearSelect.value;
+                yearSelect.innerHTML = '<option value="">Toutes les années</option>';
+                years.forEach(year => {
+                    yearSelect.innerHTML += `<option value="${year}" ${year == currentValue ? 'selected' : ''}>${year}</option>`;
+                });
+
+                // Mettre à jour les graphiques
+                updateDashboardCharts(filteredSales, filteredPurchases);
+
+            } catch (error) {
+                console.error('Erreur lors de la mise à jour du tableau de bord:', error);
+            }
+        }
+
+        function updateDashboardCharts(sales, purchases) {
+            // Top 5 produits vendus
+            updateTopProductsChart(sales);
+
+            // Produits moins vendus
+            updateLeastProductsChart(sales);
+
+            // Répartition par règlement
+            updatePaymentChart(sales);
+
+            // Ventes vs Achats mensuels
+            updateSalesPurchasesChart(sales, purchases);
+        }
+
+        function updateTopProductsChart(sales) {
+            const ctx = document.getElementById('topProductsChart').getContext('2d');
+
+            if (charts.topProducts) {
+                charts.topProducts.destroy();
+            }
+
+            // Calculer les quantités vendues par produit
+            const productSales = {};
+            sales.forEach(sale => {
+                if (productSales[sale.article]) {
+                    productSales[sale.article] += sale.quantity;
+                } else {
+                    productSales[sale.article] = sale.quantity;
+                }
+            });
+
+            // Trier et prendre le top 5
+            const sortedProducts = Object.entries(productSales)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 5);
+
+            charts.topProducts = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: sortedProducts.map(item => item[0]),
+                    datasets: [{
+                        label: 'Quantité vendue',
+                        data: sortedProducts.map(item => item[1]),
+                        backgroundColor: '#5D5CDE',
+                        borderColor: '#5D5CDE',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateLeastProductsChart(sales) {
+            const ctx = document.getElementById('leastProductsChart').getContext('2d');
+
+            if (charts.leastProducts) {
+                charts.leastProducts.destroy();
+            }
+
+            // Calculer les quantités vendues par produit
+            const productSales = {};
+            sales.forEach(sale => {
+                if (productSales[sale.article]) {
+                    productSales[sale.article] += sale.quantity;
+                } else {
+                    productSales[sale.article] = sale.quantity;
+                }
+            });
+
+            // Trier et prendre les 5 moins vendus
+            const sortedProducts = Object.entries(productSales)
+                .sort((a, b) => a[1] - b[1])
+                .slice(0, 5);
+
+            charts.leastProducts = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: sortedProducts.map(item => item[0]),
+                    datasets: [{
+                        label: 'Quantité vendue',
+                        data: sortedProducts.map(item => item[1]),
+                        backgroundColor: '#ef4444',
+                        borderColor: '#ef4444',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        function updatePaymentChart(sales) {
+            const ctx = document.getElementById('paymentChart').getContext('2d');
+
+            if (charts.payment) {
+                charts.payment.destroy();
+            }
+
+            // Calculer les montants par type de règlement
+            const paymentTypes = {};
+            sales.forEach(sale => {
+                if (paymentTypes[sale.payment]) {
+                    paymentTypes[sale.payment] += sale.total;
+                } else {
+                    paymentTypes[sale.payment] = sale.total;
+                }
+            });
+
+            charts.payment = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(paymentTypes),
+                    datasets: [{
+                        data: Object.values(paymentTypes),
+                        backgroundColor: ['#10b981', '#ef4444', '#f59e0b'],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateSalesPurchasesChart(sales, purchases) {
+            const ctx = document.getElementById('salesPurchasesChart').getContext('2d');
+
+            if (charts.salesPurchases) {
+                charts.salesPurchases.destroy();
+            }
+
+            // Calculer les données mensuelles
+            const monthlySales = {};
+            const monthlyPurchases = {};
+
+            // Initialiser les 12 mois
+            for (let i = 1; i <= 12; i++) {
+                monthlySales[i] = 0;
+                monthlyPurchases[i] = 0;
+            }
+
+            sales.forEach(sale => {
+                const month = new Date(sale.date).getMonth() + 1;
+                monthlySales[month] += sale.quantity;
+            });
+
+            purchases.forEach(purchase => {
+                const month = new Date(purchase.date).getMonth() + 1;
+                monthlyPurchases[month] += purchase.quantity;
+            });
+
+            const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+
+            charts.salesPurchases = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: months,
+                    datasets: [{
+                        label: 'Ventes',
+                        data: Object.values(monthlySales),
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        tension: 0.4
+                    }, {
+                        label: 'Achats',
+                        data: Object.values(monthlyPurchases),
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        // ==========================
+        // FONCTIONS UTILITAIRES
+        // ==========================
+
+        async function loadAllData() {
+            await loadCategories();
+            await loadProducts();
+            await loadSales();
+            await loadPurchases();
+            await loadInvoices();
+            await loadUsers();
+        }
+
+        function toggleDarkMode() {
+            document.documentElement.classList.toggle('dark');
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+                document.getElementById('fullscreenToggle').innerHTML = '<i class="fas fa-compress"></i>';
+            } else {
+                document.exitFullscreen();
+                document.getElementById('fullscreenToggle').innerHTML = '<i class="fas fa-expand"></i>';
+            }
+        }
+
+        // ==========================
+        // EXPORT/IMPORT EXCEL
+        // ==========================
+
+        async function exportData() {
+            try {
+                const workbook = XLSX.utils.book_new();
+
+                // Exporter toutes les tables
+                const users = await db.getAll('users');
+                const categories = await db.getAll('categories');
+                const products = await db.getAll('products');
+                const purchases = await db.getAll('purchases');
+                const sales = await db.getAll('sales');
+                const invoices = await db.getAll('invoices');
+
+                // Créer des feuilles pour chaque table
+                const usersSheet = XLSX.utils.json_to_sheet(users);
+                const categoriesSheet = XLSX.utils.json_to_sheet(categories);
+                const productsSheet = XLSX.utils.json_to_sheet(products);
+                const purchasesSheet = XLSX.utils.json_to_sheet(purchases);
+                const salesSheet = XLSX.utils.json_to_sheet(sales);
+                const invoicesSheet = XLSX.utils.json_to_sheet(invoices);
+
+                // Ajouter les feuilles au classeur
+                XLSX.utils.book_append_sheet(workbook, usersSheet, 'Utilisateurs');
+                XLSX.utils.book_append_sheet(workbook, categoriesSheet, 'Categories');
+                XLSX.utils.book_append_sheet(workbook, productsSheet, 'Produits');
+                XLSX.utils.book_append_sheet(workbook, purchasesSheet, 'Achats');
+                XLSX.utils.book_append_sheet(workbook, salesSheet, 'Ventes');
+                XLSX.utils.book_append_sheet(workbook, invoicesSheet, 'Factures');
+
+                // Télécharger le fichier
+                const fileName = `DigiPharma_Export_${new Date().toISOString().split('T')[0]}.xlsx`;
+                XLSX.writeFile(workbook, fileName);
+
+                alert('Export réussi !');
+
+            } catch (error) {
+                console.error('Erreur lors de l\'export:', error);
+                alert('Erreur lors de l\'export');
+            }
+        }
+
+        async function importData(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            try {
+                const data = await file.arrayBuffer();
+                const workbook = XLSX.read(data);
+
+                // Lire chaque feuille
+                const sheets = workbook.SheetNames;
+
+                for (const sheetName of sheets) {
+                    const sheet = workbook.Sheets[sheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(sheet);
+
+                    if (jsonData.length === 0) continue;
+
+                    // Déterminer la table correspondante
+                    let storeName;
+                    switch (sheetName.toLowerCase()) {
+                        case 'utilisateurs': storeName = 'users'; break;
+                        case 'categories': storeName = 'categories'; break;
+                        case 'produits': storeName = 'products'; break;
+                        case 'achats': storeName = 'purchases'; break;
+                        case 'ventes': storeName = 'sales'; break;
+                        case 'factures': storeName = 'invoices'; break;
+                        default: continue;
+                    }
+
+                    // Vider la table existante
+                    await db.clear(storeName);
+
+                    // Importer les nouvelles données
+                    for (const item of jsonData) {
+                        await db.add(storeName, item);
+                    }
+                }
+
+                // Recharger toutes les données
+                await loadAllData();
+                updateDashboard();
+
+                alert('Import réussi !');
+
+            } catch (error) {
+                console.error('Erreur lors de l\'import:', error);
+                alert('Erreur lors de l\'import');
+            }
+
+            // Réinitialiser l'input file
+            e.target.value = '';
+        }
+
+        async function clearAllData() {
+            if (confirm('Êtes-vous sûr de vouloir vider toutes les données ? Cette action est irréversible.')) {
+                if (confirm('Confirmation finale : toutes les données seront supprimées !')) {
+                    try {
+                        // Vider toutes les tables sauf les utilisateurs
+                        await db.clear('categories');
+                        await db.clear('products');
+                        await db.clear('purchases');
+                        await db.clear('sales');
+                        await db.clear('invoices');
+
+                        // Réinitialiser les données par défaut
+                        await initializeDefaultData();
+
+                        // Recharger toutes les données
+                        await loadAllData();
+                        updateDashboard();
+
+                        alert('Toutes les données ont été supprimées et réinitialisées !');
+
+                    } catch (error) {
+                        console.error('Erreur lors de la suppression:', error);
+                        alert('Erreur lors de la suppression');
+                    }
+                }
+            }
+        }
+
+        function toggleSettingsMenu() {
+            document.getElementById('settingsMenu').classList.toggle('hidden');
+        }
+
+        function openImageModal(src) {
+            document.getElementById('fullscreenImage').src = src;
+            openModal('imageModal');
+        }
+
+        // ==========================
+        // GESTION DE L'INSTALLATION PWA
+        // ==========================
+
+        function initializePWAInstallation() {
+            // Écouter l'événement beforeinstallprompt
+            window.addEventListener('beforeinstallprompt', (e) => {
+                // Empêcher l'affichage automatique de la bannière d'installation
+                e.preventDefault();
+                // Stocker l'événement pour l'utiliser plus tard
+                deferredPrompt = e;
+            });
+
+            // Écouter l'événement appinstalled
+            window.addEventListener('appinstalled', (evt) => {
+                // Masquer le bouton d'installation après une installation réussie
+                document.getElementById('installAppBtn').classList.add('hidden');
+                // Afficher un message de confirmation
+                alert('Application installée avec succès !');
+            });
+        }
+
+        async function installApp() {
+            const installBtn = document.getElementById('installAppBtn');
+            if (deferredPrompt) {
+                // Afficher la boîte de dialogue d'installation du navigateur
+                deferredPrompt.prompt();
+                // Attendre la réponse de l'utilisateur
+                const { outcome } = await deferredPrompt.userChoice;
+                // On ne peut utiliser le prompt qu'une seule fois
+                deferredPrompt = null;
+                // Masquer le bouton après l'interaction
+                installBtn.classList.add('hidden');
+
+                if (outcome === 'accepted') {
+                    console.log('L\'utilisateur a accepté l\'installation');
+                } else {
+                    console.log('L\'utilisateur a refusé l\'installation');
+                }
+            } else {
+                // deferredPrompt n'est pas disponible.
+                // Cela peut se produire si la PWA est déjà installée,
+                // ou si le navigateur ne la prend pas en charge.
+                // On peut guider l'utilisateur pour une installation manuelle.
+                alert(
+                    'Pour installer l\'application, suivez ces étapes :\n\n' +
+                    'Chrome (Ordinateur) : Cliquez sur les trois points en haut à droite → "Installer DigiPharma".\n\n' +
+                    'Safari (iOS) : Appuyez sur le bouton Partager → "Ajouter à l\'écran d\'accueil".\n\n' +
+                    'Chrome (Android) : Appuyez sur les trois points en haut à droite → "Installer l\'application".'
+                );
+            }
+        }
+    </script>
+</body>
+
+</html>
